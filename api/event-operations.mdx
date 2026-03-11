@@ -1,0 +1,233 @@
+---
+title: 'Event Operations'
+description: 'APIs for listing and managing events'
+icon: 'calendar-days'
+---
+
+## Overview
+
+Event operations provide functions to retrieve event data for clients, including active events and their configurations.
+
+## list_events_clients
+
+Retrieves all events associated with a specific client. Used to display available events on the portal.
+
+<ParamField path="client_id" type="string" required>
+  The unique identifier of the client whose events should be retrieved
+</ParamField>
+
+### Request Example
+
+```javascript
+import { list_events_clients } from '@/guards/firebase/firebase';
+
+const response = await list_events_clients({ 
+  client_id: "client_12345" 
+});
+```
+
+### Usage in Components
+
+Typical usage in App.jsx to load initial event data:
+
+```javascript
+import { db, list_events_clients } from './guards/firebase/firebase';
+import { collection, getDocs, doc, getDoc } from 'firebase/firestore';
+
+const fetchData = async () => {
+  try {
+    // Get client metadata from Firestore
+    const metadataRef = doc(db, '/metadata', 'web');
+    const metadataPage = await getDoc(metadataRef);
+    
+    if (metadataPage.exists()) {
+      // Fetch all events for the client
+      const resp = await list_events_clients({ 
+        client_id: metadataPage.data()?.client_id 
+      });
+      
+      // Filter for active events only
+      const activeEvents = resp.data.eventos.filter(
+        event => event.status === 'Activo'
+      );
+      
+      // Store in Redux or state
+      dispatch(setEvents(activeEvents));
+    }
+  } catch (error) {
+    console.error('Error fetching events:', error);
+  }
+};
+```
+
+### Response
+
+<ResponseField name="eventos" type="array">
+  Array of event objects
+  
+  <ResponseField name="id" type="string">
+    Unique event identifier
+  </ResponseField>
+  
+  <ResponseField name="title" type="string">
+    Event title/name
+  </ResponseField>
+  
+  <ResponseField name="status" type="string">
+    Event status: "Activo" (Active), "Inactivo" (Inactive), "Finalizado" (Finished)
+  </ResponseField>
+  
+  <ResponseField name="description" type="string">
+    Event description
+  </ResponseField>
+  
+  <ResponseField name="date" type="string">
+    Event date
+  </ResponseField>
+  
+  <ResponseField name="location" type="string">
+    Event location/venue
+  </ResponseField>
+  
+  <ResponseField name="client_id" type="string">
+    Associated client ID
+  </ResponseField>
+  
+  <ResponseField name="media_poster" type="string">
+    URL to event poster image
+  </ResponseField>
+  
+  <ResponseField name="media_banner" type="string">
+    URL to event banner image
+  </ResponseField>
+</ResponseField>
+
+#### Response Example
+
+```json
+{
+  "eventos": [
+    {
+      "id": "event_001",
+      "title": "Concierto de Música Latina 2024",
+      "status": "Activo",
+      "description": "Gran concierto con artistas internacionales",
+      "date": "2024-06-15T20:00:00Z",
+      "location": "Teatro Nacional",
+      "client_id": "client_12345",
+      "media_poster": "https://storage.googleapis.com/...",
+      "media_banner": "https://storage.googleapis.com/..."
+    },
+    {
+      "id": "event_002",
+      "title": "Festival de Teatro",
+      "status": "Activo",
+      "description": "Tres días de las mejores obras teatrales",
+      "date": "2024-07-20T19:00:00Z",
+      "location": "Centro Cultural",
+      "client_id": "client_12345",
+      "media_poster": "https://storage.googleapis.com/...",
+      "media_banner": "https://storage.googleapis.com/..."
+    }
+  ]
+}
+```
+
+<Note>
+  Filter events by status to show only active events to customers. Inactive or finished events should not be displayed in the public portal.
+</Note>
+
+## Error Handling
+
+```javascript
+try {
+  const response = await list_events_clients({ client_id });
+  
+  if (!response.data || !response.data.eventos) {
+    throw new Error('No events found');
+  }
+  
+  // Process events
+  const events = response.data.eventos;
+  
+} catch (error) {
+  if (error.code === 'functions/not-found') {
+    console.error('Client not found');
+  } else if (error.code === 'functions/permission-denied') {
+    console.error('Permission denied');
+  } else {
+    console.error('Error loading events:', error);
+  }
+}
+```
+
+## Common Use Cases
+
+### Load Events on Application Start
+
+```javascript
+useEffect(() => {
+  const loadEvents = async () => {
+    try {
+      const response = await list_events_clients({ client_id });
+      const activeEvents = response.data.eventos.filter(
+        event => event.status === 'Activo'
+      );
+      setEvents(activeEvents);
+    } catch (error) {
+      console.error('Failed to load events:', error);
+    }
+  };
+  
+  loadEvents();
+}, [client_id]);
+```
+
+### Refresh Events
+
+```javascript
+const refreshEvents = async () => {
+  setLoading(true);
+  try {
+    const response = await list_events_clients({ client_id });
+    dispatch(setEvents(response.data.eventos));
+  } catch (error) {
+    toast.error('Error al actualizar eventos');
+  } finally {
+    setLoading(false);
+  }
+};
+```
+
+### Display Events in UI
+
+```javascript
+const EventList = () => {
+  const [events, setEvents] = useState([]);
+  
+  useEffect(() => {
+    const fetchEvents = async () => {
+      const response = await list_events_clients({ client_id });
+      setEvents(response.data.eventos.filter(e => e.status === 'Activo'));
+    };
+    fetchEvents();
+  }, []);
+  
+  return (
+    <div className="events-grid">
+      {events.map(event => (
+        <EventCard key={event.id} event={event} />
+      ))}
+    </div>
+  );
+};
+```
+
+<Warning>
+  Always validate that the client_id exists before calling this function. Invalid client IDs will result in an error.
+</Warning>
+
+## Related Operations
+
+- [Ticket Operations](/api/ticket-operations) - Get ticket availability for events
+- [Firebase Functions](/api/firebase-functions) - Core Firebase setup

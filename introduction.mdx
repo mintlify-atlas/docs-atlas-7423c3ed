@@ -1,0 +1,331 @@
+---
+title: Introduction
+description: Learn about TradeMaster Transactions Portales - a powerful multi-tenant event ticketing and payment processing platform
+---
+
+## What is TradeMaster Transactions?
+
+TradeMaster Transactions Portales is a modern, multi-tenant event ticketing and payment processing platform built with React, Firebase, and Redux. It enables organizations to create branded portals for selling event tickets with integrated payment processing through Stripe and Mercantil payment gateways.
+
+## Key Features
+
+<CardGroup cols={2}>
+  <Card title="Multi-Tenant Architecture" icon="building">
+    Each client gets their own branded portal with custom domain support, themes, and configurations stored in Firebase
+  </Card>
+  
+  <Card title="Firebase Backend" icon="fire">
+    Real-time database, authentication, cloud functions, and file storage powered by Firebase
+  </Card>
+  
+  <Card title="Multiple Payment Gateways" icon="credit-card">
+    Integrated support for Stripe, Mercantil (TDC, TDD, C2P), and mobile payments with BCV exchange rates
+  </Card>
+  
+  <Card title="Ticket Management" icon="ticket">
+    Real-time ticket locking, inventory management, and virtual ticket sales with QR code generation
+  </Card>
+</CardGroup>
+
+## Who is this for?
+
+TradeMaster Transactions is designed for:
+
+- **Event Organizers**: Sell tickets for concerts, conferences, sports events, and more
+- **Venue Operators**: Manage multiple events across different venues with real-time inventory
+- **Ticket Resellers**: White-label solution for agencies selling tickets for multiple clients
+- **Enterprise Organizations**: Host branded ticketing portals for corporate events
+
+## Architecture Overview
+
+The platform follows a modern JAMstack architecture:
+
+```mermaid
+graph TD
+    A[Client Browser] --> B[Vite/React SPA]
+    B --> C[Firebase Auth]
+    B --> D[Firebase Firestore]
+    B --> E[Cloud Functions]
+    E --> F[Stripe API]
+    E --> G[Mercantil Gateway]
+    E --> H[Email Service]
+    D --> I[Multi-Tenant Data]
+```
+
+<Note>
+  The application is built as a Single Page Application (SPA) using Vite for blazing-fast development and optimized production builds.
+</Note>
+
+## Core Technologies
+
+### Frontend Stack
+
+The platform leverages modern React ecosystem tools:
+
+<CodeGroup>
+
+```json package.json
+{
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.26.1",
+    "@reduxjs/toolkit": "^2.2.7",
+    "react-redux": "^9.1.2",
+    "redux-persist": "^6.0.0",
+    "firebase": "^10.13.1",
+    "@stripe/react-stripe-js": "^5.3.0",
+    "@stripe/stripe-js": "^8.2.0",
+    "tailwindcss": "^3.4.10",
+    "@radix-ui/react-dialog": "^1.1.2",
+    "formik": "^2.4.6",
+    "yup": "^1.4.0"
+  }
+}
+```
+
+```javascript vite.config.js
+import { defineConfig } from "vite";
+import react from "@vitejs/plugin-react";
+import svgr from "@svgr/rollup";
+
+export default defineConfig({
+  plugins: [svgr(), react()],
+  resolve: {
+    alias: {
+      "@": fileURLToPath(new URL("./src", import.meta.url)),
+    },
+  },
+});
+```
+
+</CodeGroup>
+
+### State Management
+
+Redux Toolkit with persistence for managing application state:
+
+```javascript src/store/Store.js
+import { configureStore } from "@reduxjs/toolkit";
+import { persistReducer, persistStore } from "redux-persist";
+import storage from "redux-persist/lib/storage";
+
+import authReducer from "./apps/auth/authSlice";
+import setupReducer from "./apps/setup/setupSlice";
+import eventsReducer from "./apps/events/eventsSlices";
+import loadingReducer from "./apps/loading/loadingSlice";
+
+const persistConfig = {
+  key: "root",
+  storage,
+  whitelist: ["auth", "loading", "setup", "events", "configData"],
+};
+
+export const store = configureStore({
+  reducer: persistedReducer,
+  middleware: (getDefaultMiddleware) =>
+    getDefaultMiddleware({
+      serializableCheck: {
+        ignoredActions: [FLUSH, REHYDRATE, PAUSE, PERSIST, PURGE, REGISTER],
+      },
+    }),
+});
+```
+
+See src/store/Store.js:59 for the complete Redux store configuration.
+
+### Firebase Integration
+
+Firebase provides the complete backend infrastructure:
+
+```javascript src/guards/firebase/firebase.js
+import { initializeApp } from "firebase/app";
+import { getAuth } from "firebase/auth";
+import { getStorage } from "firebase/storage";
+import { initializeFirestore } from "firebase/firestore";
+import { getFunctions, httpsCallable } from "firebase/functions";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyD1bPm1YvtQKwAyXNUxE--YbkbEwydCuCI",
+  authDomain: "trademastertransaction-project.firebaseapp.com",
+  projectId: "trademastertransaction-project",
+  storageBucket: "trademastertransaction-project.appspot.com",
+  messagingSenderId: "324510208107",
+  appId: "1:324510208107:web:63af97fd7bea1f9e93212e"
+};
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const storage = getStorage(app);
+const db = initializeFirestore(app, {
+  experimentalForceLongPolling: true,
+});
+```
+
+See src/guards/firebase/firebase.js:1 for the complete Firebase setup with all cloud function exports.
+
+## Multi-Tenant Design
+
+The platform uses a sophisticated multi-tenant architecture where each client gets their own branded experience:
+
+1. **Domain-based tenant resolution**: Subdomain determines which portal configuration to load
+2. **Tenant metadata in Firestore**: Each portal's branding, configuration, and settings
+3. **Dynamic theming**: Custom colors, logos, and favicon per tenant
+4. **Isolated data**: Events, orders, and user data scoped to each tenant
+
+```javascript src/App.jsx
+useEffect(() => {
+  const fetchData = async () => {
+    const currentUrl = window.location.href;
+    const splitUrl = currentUrl.split('/');
+    
+    // Fetch tenant configuration from portals_tenants collection
+    const dataPage = await getDoc(doc(db, "portals_tenants", splitUrl[2]));
+    
+    if (dataPage.exists()) {
+      const DataPage = dataPage.data();
+      // Load portal metadata
+      const metadataPage = await getDoc(doc(db, "portals", DataPage?.value));
+      
+      // Set custom favicon
+      let link = document.querySelector("link[rel~='icon']");
+      if (link instanceof HTMLLinkElement) {
+        link.href = metadataPage.data()?.media_favicon;
+      }
+      
+      // Load client events
+      const resp = await list_events_clients({ 
+        client_id: metadataPage.data()?.client_id 
+      });
+      
+      dispatch(setEvents(resp.data.eventos.filter(event => event.status === 'Activo')));
+      dispatch(getSetup(metadataPage.data()));
+    }
+  };
+  
+  fetchData();
+}, []);
+```
+
+See src/App.jsx:17 for the complete tenant initialization logic.
+
+## Payment Processing
+
+The platform supports multiple payment methods:
+
+<Tabs>
+  <Tab title="Stripe">
+    International credit/debit card payments with PCI-compliant tokenization:
+    
+    ```javascript src/guards/stripe/stripeConfig.js
+    import { loadStripe } from '@stripe/stripe-js';
+    
+    const STRIPE_PUBLIC_KEY = import.meta.env.VITE_STRIPE_PUBLIC_KEY;
+    
+    export const initializeStripe = async () => {
+      if (!stripePromise) {
+        stripePromise = loadStripe(STRIPE_PUBLIC_KEY);
+      }
+      return stripePromise;
+    };
+    ```
+    
+    Cloud functions handle payment intent creation and confirmation (see src/guards/firebase/firebase.js:36).
+  </Tab>
+  
+  <Tab title="Mercantil">
+    Venezuelan bank payment gateway supporting:
+    - **TDC**: Credit card payments
+    - **TDD**: Debit card payments
+    - **C2P**: Card-to-person transfers
+    
+    All Mercantil integrations are handled via Firebase Cloud Functions for security.
+  </Tab>
+  
+  <Tab title="Mobile Payment">
+    Mobile banking payments with automatic BCV (Venezuelan Central Bank) exchange rate conversion:
+    
+    ```javascript
+    const mobile_payment_bcv = httpsCallable(functions, "mobile_payment_bcv");
+    ```
+  </Tab>
+</Tabs>
+
+<Warning>
+  Never expose API keys or payment credentials in frontend code. All sensitive payment operations are handled server-side via Firebase Cloud Functions.
+</Warning>
+
+## Authentication & Authorization
+
+Firebase Authentication provides secure user management:
+
+```javascript src/guards/authGuard/AuthGuard.js
+import { useSelector } from 'react-redux';
+import { useNavigate, useLocation } from 'react-router-dom';
+
+const AuthGuard = ({ children }) => {
+  const isAuthenticated = useSelector((state) => state.auth.isAuthenticated);
+  const navigate = useNavigate();
+  const location = useLocation();
+  
+  useEffect(() => {
+    if (!isAuthenticated) {
+      // Save return URL for post-login redirect
+      const currentUrl = location.pathname + location.search;
+      sessionStorage.setItem('returnUrl', currentUrl);
+      navigate('/auth/checkEmail', { replace: true });
+    }
+  }, [isAuthenticated, location, navigate]);
+  
+  return children;
+};
+```
+
+Protected routes (purchases, user profile) require authentication via the `AuthGuard` component (see src/guards/authGuard/AuthGuard.js:5).
+
+## UI Component Library
+
+Built on Radix UI primitives with Tailwind CSS styling:
+
+- **Headless components**: Accessible, unstyled components from Radix UI
+- **Utility-first CSS**: Tailwind CSS for rapid styling
+- **PrimeReact integration**: Advanced components for tables and complex UI
+- **Lucide icons**: Modern, customizable icon set
+
+```javascript tailwind.config.js
+export default {
+  darkMode: ["class"],
+  content: [
+    './index.html',
+    './src/**/*.{vue,js,ts,jsx,tsx}',
+    './node_modules/primereact/**/*.{js,ts,jsx,tsx}',
+  ],
+  plugins: [
+    require('tailwindcss-animated'),
+    require('@tailwindcss/forms'),
+    require("tailwindcss-animate")
+  ],
+}
+```
+
+See tailwind.config.js:1 for the complete Tailwind configuration.
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Quick Start" icon="rocket" href="/quickstart">
+    Set up your development environment and run the portal locally
+  </Card>
+  
+  <Card title="Architecture Deep Dive" icon="diagram-project" href="/architecture">
+    Learn about the system architecture and design patterns
+  </Card>
+  
+  <Card title="API Reference" icon="code" href="/api/firebase-functions">
+    Explore Firebase Cloud Functions and API endpoints
+  </Card>
+  
+  <Card title="Deployment" icon="cloud" href="/deployment/firebase-hosting">
+    Deploy your portal to Firebase Hosting
+  </Card>
+</CardGroup>

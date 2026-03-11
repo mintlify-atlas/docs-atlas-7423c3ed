@@ -1,0 +1,938 @@
+---
+title: System Architecture
+description: Deep dive into TradeMaster Transactions Portales architecture, design patterns, and technical implementation
+---
+
+## Overview
+
+TradeMaster Transactions Portales is built on a modern, scalable architecture that combines the best of JAMstack principles with real-time backend services. The platform leverages React for the frontend, Firebase for backend services, and Redux for state management.
+
+```mermaid
+graph TB
+    subgraph "Client Layer"
+        A[Browser]
+        B[React SPA]
+        C[Redux Store]
+        D[Redux Persist]
+    end
+    
+    subgraph "Application Layer"
+        E[React Router]
+        F[Auth Guards]
+        G[UI Components]
+        H[Formik Forms]
+    end
+    
+    subgraph "Integration Layer"
+        I[Firebase SDK]
+        J[Stripe SDK]
+        K[Axios HTTP]
+    end
+    
+    subgraph "Backend Services"
+        L[Firebase Auth]
+        M[Firestore DB]
+        N[Cloud Storage]
+        O[Cloud Functions]
+    end
+    
+    subgraph "External APIs"
+        P[Stripe API]
+        Q[Mercantil Gateway]
+        R[BCV Exchange API]
+        S[Email Service]
+    end
+    
+    A --> B
+    B --> C
+    C --> D
+    B --> E
+    B --> F
+    B --> G
+    B --> H
+    B --> I
+    B --> J
+    B --> K
+    I --> L
+    I --> M
+    I --> N
+    I --> O
+    O --> P
+    O --> Q
+    O --> R
+    O --> S
+```
+
+## Multi-Tenant Architecture
+
+The platform implements a sophisticated multi-tenant architecture where each client gets their own branded portal while sharing the same codebase and infrastructure.
+
+### Tenant Resolution
+
+Tenant identification happens through subdomain analysis at application initialization:
+
+```javascript src/App.jsx (lines 17-46)
+import { useEffect } from 'react';
+import { useDispatch } from 'react-redux';
+import { doc, getDoc } from 'firebase/firestore';
+import { db, list_events_clients } from './guards/firebase/firebase';
+
+function App() {
+  const dispatch = useDispatch();
+  
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        dispatch(setLoadingData({ loading: true }));
+        
+        // Extract tenant identifier from URL
+        const currentUrl = window.location.href;
+        const splitUrl = currentUrl.split('/');
+        
+        // Step 1: Resolve tenant from subdomain
+        const dataPage = await getDoc(doc(db, "portals_tenants", splitUrl[2]));
+        
+        if (dataPage.exists()) {
+          const DataPage = dataPage.data();
+          
+          // Step 2: Load portal metadata
+          const metadataPage = await getDoc(doc(db, "portals", DataPage?.value));
+          
+          // Step 3: Customize branding
+          let link = document.querySelector("link[rel~='icon']");
+          if (link instanceof HTMLLinkElement) {
+            link.href = metadataPage.data()?.media_favicon;
+          }
+          
+          // Step 4: Load tenant-specific events
+          const resp = await list_events_clients({ 
+            client_id: metadataPage.data()?.client_id 
+          });
+          
+          // Step 5: Initialize Redux store with tenant data
+          dispatch(fetchSetup());
+          dispatch(setEvents(resp.data.eventos.filter(event => event.status === 'Activo')));
+          dispatch(getSetup(metadataPage.data()));
+          dispatch(setLoadingData({ loading: false }));
+        } else {
+          // Tenant not found - redirect to main site
+          window.location.replace('https://trademastertransactions.com/');
+        }
+      } catch (error) {
+        console.log("🚀 ~ fetchData ~ error:", error)
+      }
+    };
+    
+    fetchData();
+  }, []);
+  
+  return (
+    <ThemeProvider>
+      <div>{routing}</div>
+    </ThemeProvider>
+  )
+}
+```
+
+See src/App.jsx:17 for the complete tenant initialization logic.
+
+### Data Isolation
+
+Each tenant's data is isolated through:
+
+1. **Client ID scoping**: All queries filter by `client_id`
+2. **Firestore security rules**: Server-side enforcement of data boundaries
+3. **Cloud Functions validation**: Backend validates tenant access on every request
+
+```javascript
+// Example: Loading tenant-specific events via Cloud Function
+const list_events_clients = httpsCallable(functions, "list_events_clients");
+
+const response = await list_events_clients({ 
+  client_id: tenantData.client_id 
+});
+
+// Returns only events belonging to this tenant
+const activeEvents = response.data.eventos.filter(event => event.status === 'Activo');
+```
+
+### Tenant Configuration Schema
+
+Firestore collections store tenant configuration:
+
+**`portals_tenants` Collection:**
+```json
+{
+  "[subdomain]": {
+    "value": "portal_id",
+    "active": true,
+    "created_at": "timestamp"
+  }
+}
+```
+
+**`portals` Collection:**
+```json
+{
+  "portal_id": {
+    "client_id": "client_123",
+    "name": "Portal Name",
+    "media_favicon": "https://...",
+    "media_logo": "https://...",
+    "theme": {
+      "primary_color": "#FF6B00",
+      "secondary_color": "#1E40AF"
+    },
+    "contact": {
+      "email": "support@example.com",
+      "phone": "+1234567890"
+    },
+    "payment_methods": ["stripe", "mercantil_tdc"],
+    "settings": { }
+  }
+}
+```
+
+## Frontend Architecture
+
+### React Component Hierarchy
+
+The application follows a layered component architecture:
+
+```
+App (src/App.jsx)
+├── ThemeProvider (src/components/ThemeProvider.jsx)
+│   └── Router (src/routes/router.js)
+│       ├── FullLayout (src/layouts/full/FullLayout.js)
+│       │   ├── Header
+│       │   ├── Navigation
+│       │   ├── Content Area
+│       │   │   ├── Home (src/views/home/Home.js)
+│       │   │   ├── Event (src/views/event/Event.js)
+│       │   │   ├── EventList (src/views/eventList/EventList.js)
+│       │   │   └── Contact (src/views/contact/Contact.js)
+│       │   └── Footer
+│       ├── FullLayout + AuthGuard
+│       │   └── Protected Routes
+│       │       ├── PurchaseOrder (src/views/purchaseOrder/PurchaseOrder.js)
+│       │       ├── PurchaseSuccess (src/views/purchaseSuccess/PurchaseSuccess.js)
+│       │       └── ProfileUser (src/views/user/profile/ProfileUser.js)
+│       └── BlankLayout + GuestGuard
+│           └── Auth Pages
+│               ├── EmailCheck (src/views/auth/emailCheck/EmailCheck.jsx)
+│               ├── Login (src/views/auth/login/Login.jsx)
+│               ├── Register (src/views/auth/register/Register.jsx)
+│               └── ForgotPassword (src/views/auth/forgotPassword/ForgotPassword.jsx)
+└── Global Components
+    ├── Loading (src/components/ui/Loading.js)
+    └── ToastContainer (react-toastify)
+```
+
+### Routing Strategy
+
+React Router v6 with lazy-loaded route components:
+
+```javascript src/routes/router.js
+import React, { lazy } from "react";
+import { Navigate } from "react-router";
+import Loadable from "../layouts/full/shared/loadable/Loadable";
+
+/* Layouts */
+const BlankLayout = Loadable(lazy(() => import("../layouts/blank/BlankLayout")));
+const FullLayout = Loadable(lazy(() => import("../layouts/full/FullLayout")));
+
+/* Guards */
+import GuestGuard from "../guards/authGuard/GuestGuard";
+import AuthGuard from "../guards/authGuard/AuthGuard";
+
+/* Pages */
+const Home = Loadable(lazy(() => import("../views/home/Home")));
+const Event = Loadable(lazy(() => import("../views/event/Event")));
+const PurchaseOrder = Loadable(lazy(() => import("../views/purchaseOrder/PurchaseOrder")));
+
+const Router = [
+  {
+    path: "/",
+    element: <FullLayout />,
+    children: [
+      { path: "/", element: <Home /> },
+      { path: "/event/:id", element: <Event /> },
+      { path: "/events", element: <EventList /> },
+      { path: "/contacto", element: <Contact /> },
+      { path: "*", element: <Navigate to="/auth/404" /> },
+    ],
+  },
+  {
+    path: "/purchaseOrder",
+    element: (
+      <AuthGuard>
+        <FullLayout />
+      </AuthGuard>
+    ),
+    children: [
+      { path: "/purchaseOrder", element: <Navigate to="/" /> },
+      { path: "/purchaseOrder/:idEvent", element: <PurchaseOrder /> },
+    ],
+  },
+  {
+    path: "/auth",
+    element: (
+      <GuestGuard>
+        <BlankLayout />
+      </GuestGuard>
+    ),
+    children: [
+      { path: "/auth", element: <Navigate to="/auth/checkEmail" /> },
+      { path: "/auth/checkEmail", element: <EmailCheck /> },
+      { path: "/auth/login", element: <Login /> },
+      { path: "/auth/register", element: <Register /> },
+      { path: "/auth/recovery", element: <ForgotPassword /> },
+      { path: "404", element: <MissingPage /> },
+      { path: "*", element: <Navigate to="/auth/404" /> },
+    ],
+  },
+];
+
+export default Router;
+```
+
+See src/routes/router.js:29 for the complete routing configuration.
+
+**Key routing features:**
+
+- **Code splitting**: Each route is lazy-loaded for optimal performance
+- **Nested routes**: Layouts wrap child routes
+- **Route guards**: `AuthGuard` and `GuestGuard` protect routes based on authentication state
+- **Catch-all routes**: Unmatched paths redirect to 404 page
+
+### Authentication Guards
+
+**AuthGuard** - Protects routes requiring authentication:
+
+```javascript src/guards/authGuard/AuthGuard.js
+import { useEffect } from 'react';
+import { useSelector } from 'react-redux';
+import { useNavigate, useLocation } from 'react-router-dom';
+
+const AuthGuard = ({ children }) => {
+  const isAuthenticated = useSelector((state) => state.auth.isAuthenticated);
+  const navigate = useNavigate();
+  const location = useLocation();
+  
+  useEffect(() => {
+    if (!isAuthenticated) {
+      // Save current URL for redirect after login
+      const currentUrl = location.pathname + location.search;
+      sessionStorage.setItem('returnUrl', currentUrl);
+      navigate('/auth/checkEmail', { replace: true });
+    }
+  }, [isAuthenticated, location, navigate]);
+  
+  return children;
+};
+
+export default AuthGuard;
+```
+
+See src/guards/authGuard/AuthGuard.js:5 for the implementation.
+
+**GuestGuard** - Redirects authenticated users away from auth pages:
+
+```javascript
+const GuestGuard = ({ children }) => {
+  const isAuthenticated = useSelector((state) => state.auth.isAuthenticated);
+  const navigate = useNavigate();
+  
+  useEffect(() => {
+    if (isAuthenticated) {
+      const returnUrl = sessionStorage.getItem('returnUrl') || '/';
+      sessionStorage.removeItem('returnUrl');
+      navigate(returnUrl, { replace: true });
+    }
+  }, [isAuthenticated, navigate]);
+  
+  return children;
+};
+```
+
+## State Management
+
+### Redux Store Architecture
+
+The application uses Redux Toolkit with redux-persist for state management:
+
+```javascript src/store/Store.js
+import { combineReducers } from "redux";
+import storage from "redux-persist/lib/storage";
+import { configureStore } from "@reduxjs/toolkit";
+import {
+  persistReducer,
+  persistStore,
+  FLUSH,
+  REHYDRATE,
+  PAUSE,
+  PERSIST,
+  PURGE,
+  REGISTER,
+} from "redux-persist";
+
+import authReducer from "./apps/auth/authSlice";
+import setupReducer from "./apps/setup/setupSlice";
+import eventsReducer from "./apps/events/eventsSlices";
+import loadingReducer from "./apps/loading/loadingSlice";
+import configDataReducer from "./apps/setup/configDataSlice";
+import emailStatusReducer from "./apps/emailStatus/emailStatusSlice";
+
+const LOGOUT = 'LOGOUT';
+
+// Redux Persist Configuration
+const persistConfig = {
+  key: "root",
+  storage,
+  whitelist: ["auth", "loading", "setup", "events", "configData", "emailStatus"],
+};
+
+// Combine all feature reducers
+const appReducer = combineReducers({
+  auth: authReducer,
+  setup: setupReducer,
+  events: eventsReducer,
+  loading: loadingReducer,
+  configData: configDataReducer,
+  emailStatus: emailStatusReducer
+});
+
+// Root reducer with logout handling
+const rootReducer = (state, action) => {
+  if (action.type === LOGOUT) {
+    // Clear persisted state on logout, but preserve setup & events
+    storage.removeItem('persist:root');
+    const { setup, events, configData } = state || {};
+    state = { setup, events, configData };
+  }
+  return appReducer(state, action);
+};
+
+const persistedReducer = persistReducer(persistConfig, rootReducer);
+
+// Configure Redux store
+export const store = configureStore({
+  reducer: persistedReducer,
+  middleware: (getDefaultMiddleware) =>
+    getDefaultMiddleware({
+      serializableCheck: {
+        ignoredActions: [FLUSH, REHYDRATE, PAUSE, PERSIST, PURGE, REGISTER],
+      },
+    }),
+});
+
+export const persistor = persistStore(store);
+export const logout = () => ({ type: LOGOUT });
+export default store;
+```
+
+See src/store/Store.js:1 for the complete Redux store configuration.
+
+### State Slices
+
+Each feature has its own Redux slice:
+
+**Auth Slice** (src/store/apps/auth/authSlice.js:1):
+```javascript
+const initialState = {
+  isAuthenticated: false,
+  isInitialized: false,
+  initialEmail: null,
+  userToComplete: null,
+  user: null,
+};
+
+const authSlice = createSlice({
+  name: "auth",
+  initialState,
+  reducers: {
+    authStateChanged(state, action) {
+      const { isAuthenticated, user } = action.payload;
+      state.isAuthenticated = isAuthenticated;
+      state.isInitialized = true;
+      state.user = user;
+    },
+    setInitialEmail(state, action) {
+      state.initialEmail = action.payload.email;
+    },
+    setUserToComplete(state, action) {
+      state.userToComplete = action.payload.user;
+    },
+  },
+});
+```
+
+**Events Slice**: Manages event listings and active event selection
+
+**Setup Slice**: Stores portal configuration and branding
+
+**Loading Slice**: Global loading state for async operations
+
+**Config Data Slice**: Additional configuration data fetched from backend
+
+**Email Status Slice**: Tracks email verification state
+
+### Persistence Strategy
+
+<Note>
+  Redux Persist stores the entire Redux state in browser LocalStorage, allowing the app to maintain state across page refreshes.
+</Note>
+
+```javascript src/main.jsx
+import { PersistGate } from 'redux-persist/integration/react';
+import store, { persistor } from './store/Store';
+
+createRoot(document.getElementById('root')).render(
+  <StrictMode>
+    <Provider store={store}>
+      <PersistGate loading={null} persistor={persistor}>
+        <BrowserRouter>
+          <App />
+        </BrowserRouter>
+      </PersistGate>
+    </Provider>
+  </StrictMode>,
+)
+```
+
+See src/main.jsx:18 for the persistence integration.
+
+**Persistence behavior:**
+
+- **Whitelisted slices**: Only specified slices are persisted (see `whitelist` in persistConfig)
+- **Logout handling**: Auth data is cleared but tenant data (setup, events) is preserved
+- **Rehydration**: State is restored before the app renders
+
+## Firebase Backend
+
+### Firebase Services
+
+The platform uses multiple Firebase services:
+
+```javascript src/guards/firebase/firebase.js
+import { initializeApp } from "firebase/app";
+import { getAuth } from "firebase/auth";
+import { getStorage } from "firebase/storage";
+import { initializeFirestore } from "firebase/firestore";
+import { getFunctions, httpsCallable } from "firebase/functions";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyD1bPm1YvtQKwAyXNUxE--YbkbEwydCuCI",
+  authDomain: "trademastertransaction-project.firebaseapp.com",
+  projectId: "trademastertransaction-project",
+  storageBucket: "trademastertransaction-project.appspot.com",
+  messagingSenderId: "324510208107",
+  appId: "1:324510208107:web:63af97fd7bea1f9e93212e"
+};
+
+const app = initializeApp(firebaseConfig);
+
+// Initialize services
+const auth = getAuth(app);
+const storage = getStorage(app);
+const db = initializeFirestore(app, {
+  experimentalForceLongPolling: true, // Better compatibility
+});
+const functions = getFunctions(app);
+
+// Export Cloud Function callable references
+const list_events_clients = httpsCallable(functions, "list_events_clients");
+const tickets_list_event_sales_virtual = httpsCallable(functions, "tickets_list_event_sales_virtual");
+const tickets_lock_virtual = httpsCallable(functions, "tickets_lock_virtual");
+const tickets_unlock_param_virtual = httpsCallable(functions, "tickets_unlock_param_virtual");
+const order_created = httpsCallable(functions, "order_created");
+const send_email = httpsCallable(functions, "send_email");
+const api_mercantil_tdc_pay = httpsCallable(functions, "api_mercantil_tdc_pay");
+const api_mercantil_tdd_pay = httpsCallable(functions, "api_mercantil_tdd_pay");
+const api_mercantil_c2p_pay = httpsCallable(functions, "api_mercantil_c2p_pay");
+const mobile_payment_bcv = httpsCallable(functions, "mobile_payment_bcv");
+const stripe_create_payment_intent = httpsCallable(functions, "stripe_create_payment_intent");
+const stripe_confirm_payment = httpsCallable(functions, "stripe_confirm_payment");
+const stripe_get_payment_intent = httpsCallable(functions, "stripe_get_payment_intent");
+
+export {
+  auth,
+  db,
+  storage,
+  app,
+  list_events_clients,
+  tickets_list_event_sales_virtual,
+  tickets_lock_virtual,
+  tickets_unlock_param_virtual,
+  order_created,
+  send_email,
+  api_mercantil_tdc_pay,
+  api_mercantil_tdd_pay,
+  api_mercantil_c2p_pay,
+  mobile_payment_bcv,
+  stripe_create_payment_intent,
+  stripe_confirm_payment,
+  stripe_get_payment_intent
+};
+```
+
+See src/guards/firebase/firebase.js:1 for the complete Firebase configuration.
+
+### Cloud Functions Architecture
+
+All backend logic is implemented as Cloud Functions:
+
+**Event Management:**
+- `list_events_clients`: Fetch events for a specific client/tenant
+- `tickets_list_event_sales_virtual`: Get available tickets for an event
+- `tickets_lock_virtual`: Lock tickets during checkout
+- `tickets_unlock_param_virtual`: Release locked tickets on timeout/cancellation
+
+**Order Processing:**
+- `order_created`: Process completed orders, update inventory
+- `send_email`: Send transactional emails (confirmations, tickets)
+
+**Payment Gateways:**
+- `stripe_create_payment_intent`: Initialize Stripe payment
+- `stripe_confirm_payment`: Confirm Stripe payment
+- `stripe_get_payment_intent`: Query payment status
+- `api_mercantil_tdc_pay`: Process Mercantil credit card
+- `api_mercantil_tdd_pay`: Process Mercantil debit card
+- `api_mercantil_c2p_pay`: Process Mercantil card-to-person
+- `mobile_payment_bcv`: Mobile payment with BCV exchange rate
+
+### Firestore Data Model
+
+**Collections:**
+
+```
+firestore
+├── portals_tenants          # Subdomain → Portal ID mapping
+├── portals                  # Portal configuration & branding
+├── events                   # Event listings
+│   └── [eventId]
+│       ├── details          # Event metadata
+│       └── tickets          # Ticket types & inventory
+├── orders                   # Purchase orders
+│   └── [orderId]
+│       ├── customer         # Buyer information
+│       ├── items            # Ordered tickets
+│       ├── payment          # Payment details
+│       └── status           # Order status
+├── users                    # User profiles
+│   └── [userId]
+│       ├── profile          # Personal information
+│       ├── orders           # Order history
+│       └── date             # Account timestamps
+└── locks                    # Temporary ticket locks
+    └── [lockId]
+        ├── ticketId
+        ├── userId
+        └── expiresAt
+```
+
+## Payment Processing Architecture
+
+### Stripe Integration
+
+Stripe handles international credit/debit card payments:
+
+```javascript src/guards/stripe/stripeConfig.js
+import { loadStripe } from '@stripe/stripe-js';
+
+const STRIPE_PUBLIC_KEY = import.meta.env.VITE_STRIPE_PUBLIC_KEY || 'pk_test_...';
+
+let stripePromise = null;
+
+export const initializeStripe = async () => {
+  if (!STRIPE_PUBLIC_KEY || STRIPE_PUBLIC_KEY === 'pk_test_...') {
+    console.error('❌ STRIPE_PUBLIC_KEY no está configurada.');
+    throw new Error('La clave pública de Stripe no está configurada');
+  }
+  
+  if (!stripePromise) {
+    stripePromise = loadStripe(STRIPE_PUBLIC_KEY);
+  }
+  return stripePromise;
+};
+```
+
+See src/guards/stripe/stripeConfig.js:1 for Stripe initialization.
+
+**Stripe Payment Flow:**
+
+<Steps>
+
+<Step title="Create Payment Intent">
+  Frontend calls Cloud Function to create payment intent:
+  
+  ```javascript
+  const { data } = await stripe_create_payment_intent({
+    amount: totalAmount,
+    currency: 'usd',
+    orderId: orderId,
+  });
+  
+  const clientSecret = data.clientSecret;
+  ```
+</Step>
+
+<Step title="Collect Payment Method">
+  Stripe Elements collects payment details securely:
+  
+  ```javascript src/views/purchaseOrder/PurchaseOrder.js
+  import { CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
+  
+  const StripeCardInput = () => {
+    return (
+      <CardElement
+        options={{
+          style: {
+            base: {
+              fontSize: '16px',
+              color: 'hsl(var(--foreground))',
+              fontFamily: '"Inter", sans-serif',
+            },
+            invalid: {
+              color: 'hsl(var(--destructive))',
+            },
+          },
+        }}
+      />
+    );
+  };
+  ```
+  
+  See src/views/purchaseOrder/PurchaseOrder.js:56 for the Stripe card input component.
+</Step>
+
+<Step title="Confirm Payment">
+  Frontend confirms payment with Stripe:
+  
+  ```javascript
+  const { error, paymentIntent } = await stripe.confirmCardPayment(clientSecret, {
+    payment_method: {
+      card: cardElement,
+      billing_details: {
+        name: customerName,
+        email: customerEmail,
+      },
+    },
+  });
+  
+  if (paymentIntent.status === 'succeeded') {
+    // Payment successful
+    await stripe_confirm_payment({ orderId, paymentIntentId: paymentIntent.id });
+  }
+  ```
+</Step>
+
+<Step title="Process Order">
+  Cloud Function validates payment and processes order:
+  
+  ```javascript
+  // Backend validates with Stripe API
+  const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
+  
+  if (paymentIntent.status === 'succeeded') {
+    // Update order status
+    // Release ticket locks
+    // Send confirmation email
+    // Generate QR codes
+  }
+  ```
+</Step>
+
+</Steps>
+
+### Mercantil Gateway Integration
+
+Mercantil provides payment processing for Venezuelan banks:
+
+- **TDC (Tarjeta de Crédito)**: Credit card payments
+- **TDD (Tarjeta de Débito)**: Debit card payments  
+- **C2P (Card to Person)**: Card-to-person transfers
+
+All Mercantil integrations are implemented server-side via Cloud Functions to protect API credentials.
+
+### Payment Security
+
+<Warning>
+  **PCI Compliance**: The frontend never handles raw payment card data. Stripe.js and Mercantil APIs tokenize payment information before transmission.
+</Warning>
+
+**Security measures:**
+
+1. **Tokenization**: Card details are tokenized by payment providers
+2. **Server-side processing**: All payment API calls from Cloud Functions
+3. **HTTPS only**: All communication over encrypted connections
+4. **Idempotency**: Payment requests use idempotency keys to prevent duplicates
+5. **Webhook verification**: Payment status updates verified via webhooks
+
+## Build & Deployment
+
+### Vite Build Configuration
+
+```javascript vite.config.js
+import { fileURLToPath, URL } from "node:url";
+import { defineConfig } from "vite";
+import react from "@vitejs/plugin-react";
+import svgr from "@svgr/rollup";
+import fs from "fs/promises";
+
+export default defineConfig({
+  plugins: [svgr(), react()],
+  resolve: {
+    alias: {
+      "@": fileURLToPath(new URL("./src", import.meta.url)),
+    },
+  },
+  esbuild: {
+    loader: "jsx",
+    include: /src\/.*\.jsx?$/,
+    exclude: [],
+  },
+  optimizeDeps: {
+    esbuildOptions: {
+      loader: {
+        ".js": "jsx",
+      },
+      plugins: [
+        {
+          name: "load-js-files-as-jsx",
+          setup(build) {
+            build.onLoad({ filter: /src\\.*\.js$/ }, async (args) => ({
+              loader: "jsx",
+              contents: await fs.readFile(args.path, "utf8"),
+            }));
+          },
+        },
+      ],
+    },
+  },
+});
+```
+
+See vite.config.js:9 for the complete Vite configuration.
+
+**Build optimizations:**
+
+- **Code splitting**: Automatic route-based code splitting
+- **Tree shaking**: Dead code elimination
+- **Asset optimization**: Image and CSS optimization
+- **JSX transformation**: `.js` files treated as JSX
+- **SVG as React components**: `@svgr/rollup` plugin
+
+### Firebase Hosting Configuration
+
+```json firebase.json
+{
+  "hosting": {
+    "site": "trademastertransaction-protales",
+    "public": "dist",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ],
+    "rewrites": [
+      {
+        "source": "**",
+        "destination": "/index.html"
+      }
+    ]
+  }
+}
+```
+
+See firebase.json:2 for Firebase Hosting configuration.
+
+**Hosting features:**
+
+- **SPA routing**: All routes serve `index.html` (client-side routing)
+- **CDN delivery**: Global content delivery network
+- **Automatic HTTPS**: SSL certificates managed by Firebase
+- **Custom domains**: Support for multiple custom domains per tenant
+
+### Deployment Process
+
+<Steps>
+
+<Step title="Build for Production">
+  ```bash
+  npm run build
+  ```
+  
+  Creates optimized bundle in `dist/` directory.
+</Step>
+
+<Step title="Deploy to Firebase Hosting">
+  ```bash
+  firebase deploy --only hosting
+  ```
+  
+  Uploads build artifacts to Firebase CDN.
+</Step>
+
+<Step title="Deploy Cloud Functions">
+  ```bash
+  firebase deploy --only functions
+  ```
+  
+  Updates backend Cloud Functions.
+</Step>
+
+<Step title="Configure Custom Domains">
+  In Firebase Console:
+  1. Navigate to Hosting
+  2. Add custom domain
+  3. Verify domain ownership
+  4. Update DNS records
+  5. Map domain to tenant in `portals_tenants` collection
+</Step>
+
+</Steps>
+
+## Performance Optimizations
+
+### Frontend Performance
+
+- **Code splitting**: Routes lazy-loaded with React.lazy()
+- **Image optimization**: WebP format with fallbacks
+- **CSS optimization**: Tailwind JIT mode, unused CSS purged
+- **Bundle analysis**: Vite's built-in bundle analyzer
+- **Caching**: Service worker caching (if enabled)
+
+### Backend Performance
+
+- **Firestore indexing**: Composite indexes for complex queries
+- **Cloud Function optimization**: Warm containers, minimal cold starts
+- **CDN caching**: Static assets served from edge locations
+- **Connection pooling**: Database connections reused across requests
+
+### State Management Performance
+
+- **Selective re-renders**: Redux Toolkit's built-in memoization
+- **Normalized state**: Flat state structure for efficient updates
+- **Debounced actions**: Throttle high-frequency state updates
+- **Persistence optimization**: Only whitelisted slices persisted
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="API Reference" icon="code" href="/api/firebase-functions">
+    Explore Cloud Functions and API endpoints in detail
+  </Card>
+  
+  <Card title="User Authentication" icon="lock" href="/features/user-authentication">
+    Configure Firebase Authentication and user flows
+  </Card>
+  
+  <Card title="Payment Integration" icon="credit-card" href="/features/payment-processing">
+    Set up payment gateways and processing
+  </Card>
+  
+  <Card title="Deployment Guide" icon="cloud" href="/deployment/firebase-hosting">
+    Deploy to production with Firebase Hosting
+  </Card>
+</CardGroup>

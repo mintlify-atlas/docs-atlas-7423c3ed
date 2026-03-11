@@ -1,0 +1,303 @@
+---
+title: 'Firebase Hosting Deployment'
+description: 'Deploy TradeMaster Transactions Portales to Firebase Hosting'
+icon: 'rocket'
+---
+
+## Overview
+
+TradeMaster Transactions Portales uses Firebase Hosting for production deployment. This guide covers the complete deployment process, from building the application to configuring Firebase hosting settings.
+
+## Prerequisites
+
+Before deploying, ensure you have:
+
+- Firebase CLI installed (`npm install -g firebase-tools`)
+- Firebase project access (`trademastertransaction-project`)
+- Authenticated Firebase account
+- Production environment variables configured
+
+## Firebase Configuration
+
+### Hosting Configuration
+
+The application uses the following Firebase hosting configuration in `firebase.json`:
+
+```json firebase.json
+{
+  "hosting": {
+    "site": "trademastertransaction-protales",
+    "public": "dist",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ],
+    "rewrites": [
+      {
+        "source": "**",
+        "destination": "/index.html"
+      }
+    ]
+  }
+}
+```
+
+**Key Configuration Details:**
+
+- **site**: `trademastertransaction-protales` - The Firebase hosting site identifier
+- **public**: `dist` - The build output directory from Vite
+- **rewrites**: All routes redirect to `index.html` for client-side routing (React Router)
+
+### Project Configuration
+
+The `.firebaserc` file maps the Firebase project:
+
+```json .firebaserc
+{
+  "projects": {
+    "default": "trademastertransaction-project"
+  },
+  "targets": {
+    "trademastertransaction-project": {
+      "hosting": {
+        "trademastertransaction-protales": [
+          "trademastertransaction-protales"
+        ]
+      }
+    }
+  }
+}
+```
+
+## Deployment Process
+
+<Steps>
+  <Step title="Install Dependencies">
+    Ensure all dependencies are installed:
+    
+    ```bash
+    npm install
+    ```
+  </Step>
+
+  <Step title="Build for Production">
+    Create an optimized production build:
+    
+    ```bash
+    npm run build
+    ```
+    
+    This runs `vite build` and generates optimized assets in the `dist/` directory.
+  </Step>
+
+  <Step title="Test Build Locally (Optional)">
+    Preview the production build locally before deploying:
+    
+    ```bash
+    npm run preview
+    ```
+    
+    This serves the `dist/` folder on a local server for testing.
+  </Step>
+
+  <Step title="Authenticate with Firebase">
+    Log in to Firebase (if not already authenticated):
+    
+    ```bash
+    firebase login
+    ```
+  </Step>
+
+  <Step title="Deploy to Firebase Hosting">
+    Deploy the application:
+    
+    ```bash
+    firebase deploy --only hosting
+    ```
+    
+    Or deploy all Firebase services:
+    
+    ```bash
+    firebase deploy
+    ```
+  </Step>
+
+  <Step title="Verify Deployment">
+    After deployment completes, Firebase CLI will display the hosting URL:
+    
+    ```
+    ✔  Deploy complete!
+    
+    Project Console: https://console.firebase.google.com/project/trademastertransaction-project/overview
+    Hosting URL: https://trademastertransaction-protales.web.app
+    ```
+    
+    Visit the URL to verify the deployment.
+  </Step>
+</Steps>
+
+## Deployment Commands Reference
+
+```bash
+# Deploy hosting only
+firebase deploy --only hosting
+
+# Deploy hosting with a specific message
+firebase deploy --only hosting -m "Release v1.2.3"
+
+# Deploy all Firebase services (hosting, functions, firestore rules)
+firebase deploy
+
+# Preview deployment without publishing
+firebase hosting:channel:deploy preview
+
+# Set a specific Firebase project
+firebase use trademastertransaction-project
+```
+
+## Client-Side Routing Configuration
+
+<Warning>
+  The `rewrites` configuration in `firebase.json` is **critical** for React Router to work correctly. It ensures all routes redirect to `index.html`, allowing client-side routing to handle navigation.
+</Warning>
+
+The rewrite rule:
+
+```json
+"rewrites": [
+  {
+    "source": "**",
+    "destination": "/index.html"
+  }
+]
+```
+
+This configuration:
+- Redirects all requests to `index.html`
+- Enables React Router to handle routing on the client side
+- Prevents 404 errors when users directly access routes like `/events` or `/purchase`
+
+## Environment Variables
+
+<Warning>
+  Environment variables must be set at **build time** for Vite applications. They cannot be changed after deployment without rebuilding.
+</Warning>
+
+Ensure production environment variables are configured before building:
+
+```bash .env.production
+VITE_STRIPE_PUBLIC_KEY=pk_live_...
+```
+
+See [Build Process](/deployment/build-process) for detailed environment variable configuration.
+
+## Hosting Features
+
+### Automatic SSL
+
+Firebase Hosting automatically provisions SSL certificates for:
+- `*.web.app` domains
+- `*.firebaseapp.com` domains
+- Custom domains (if configured)
+
+### CDN Distribution
+
+All assets are automatically distributed via Firebase's global CDN for optimal performance.
+
+### Cache Control
+
+Firebase Hosting automatically sets cache headers:
+- **Static assets** (JS, CSS, images): Long cache duration with content hashing
+- **index.html**: Short cache duration for frequent updates
+
+## Rollback Deployment
+
+If you need to rollback to a previous version:
+
+<Steps>
+  <Step title="View Deployment History">
+    ```bash
+    firebase hosting:clone SOURCE_SITE_ID:SOURCE_VERSION DESTINATION_SITE_ID
+    ```
+  </Step>
+
+  <Step title="Access Firebase Console">
+    Navigate to Firebase Console > Hosting > Release history
+  </Step>
+
+  <Step title="Restore Previous Version">
+    Click "Rollback" on the desired previous version
+  </Step>
+</Steps>
+
+## Troubleshooting
+
+<Accordion title="Deployment fails with authentication error">
+  **Solution:**
+  
+  1. Re-authenticate with Firebase:
+     ```bash
+     firebase logout
+     firebase login
+     ```
+  
+  2. Verify project access:
+     ```bash
+     firebase projects:list
+     ```
+  
+  3. Ensure you have permission to deploy to the project
+</Accordion>
+
+<Accordion title="Routes return 404 errors">
+  **Solution:**
+  
+  Verify that the `rewrites` configuration in `firebase.json` is present:
+  
+  ```json
+  "rewrites": [
+    {
+      "source": "**",
+      "destination": "/index.html"
+    }
+  ]
+  ```
+  
+  Redeploy after fixing the configuration.
+</Accordion>
+
+<Accordion title="Build folder not found">
+  **Solution:**
+  
+  1. Ensure you ran `npm run build` before deploying
+  2. Verify the `dist/` folder exists
+  3. Check that `firebase.json` points to the correct `public` directory:
+     ```json
+     "public": "dist"
+     ```
+</Accordion>
+
+<Accordion title="Environment variables not working in production">
+  **Solution:**
+  
+  1. Verify variables are prefixed with `VITE_`
+  2. Set variables **before** building
+  3. Rebuild the application:
+     ```bash
+     npm run build
+     firebase deploy --only hosting
+     ```
+</Accordion>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Build Process" icon="gears" href="/deployment/build-process">
+    Learn about Vite build configuration and optimization
+  </Card>
+  
+  <Card title="Production Checklist" icon="clipboard-check" href="/deployment/production-checklist">
+    Complete pre-deployment checklist for production
+  </Card>
+</CardGroup>

@@ -1,0 +1,405 @@
+---
+title: 'Build Process'
+description: 'Production build configuration and optimization with Vite'
+icon: 'gears'
+---
+
+## Overview
+
+TradeMaster Transactions Portales uses Vite as its build tool for fast, optimized production builds. This guide covers the build process, configuration, environment variables, and output structure.
+
+## Build Scripts
+
+The following npm scripts are defined in `package.json`:
+
+```json package.json
+{
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "lint": "eslint .",
+    "preview": "vite preview"
+  }
+}
+```
+
+### Script Descriptions
+
+- **dev**: Start development server with hot module replacement (HMR)
+- **build**: Create optimized production build in `dist/` directory
+- **lint**: Run ESLint to check code quality
+- **preview**: Preview production build locally
+
+## Vite Configuration
+
+### Production Build Settings
+
+The `vite.config.js` file contains the build configuration:
+
+```javascript vite.config.js
+import { fileURLToPath, URL } from "node:url";
+import { defineConfig } from "vite";
+import react from "@vitejs/plugin-react";
+import fs from "fs/promises";
+import svgr from "@svgr/rollup";
+
+export default defineConfig({
+  plugins: [svgr(), react()],
+  resolve: {
+    alias: {
+      "@": fileURLToPath(new URL("./src", import.meta.url)),
+    },
+  },
+  esbuild: {
+    loader: "jsx",
+    include: /src\/.*\.jsx?$/,
+    exclude: [],
+  },
+  optimizeDeps: {
+    esbuildOptions: {
+      loader: {
+        ".js": "jsx",
+      },
+      plugins: [
+        {
+          name: "load-js-files-as-jsx",
+          setup(build) {
+            build.onLoad({ filter: /src\\.*\.js$/ }, async (args) => ({
+              loader: "jsx",
+              contents: await fs.readFile(args.path, "utf8"),
+            }));
+          },
+        },
+      ],
+    },
+  },
+});
+```
+
+### Key Configuration Features
+
+#### Plugins
+
+- **@svgr/rollup**: Transforms SVG files into React components
+- **@vitejs/plugin-react**: Enables React Fast Refresh and JSX transformation
+
+#### Path Aliases
+
+```javascript
+alias: {
+  "@": fileURLToPath(new URL("./src", import.meta.url)),
+}
+```
+
+Allows importing modules using `@/` prefix:
+
+```javascript
+import { auth } from '@/guards/firebase/firebase';
+import Button from '@/components/ui/Button';
+```
+
+#### JSX Support for .js Files
+
+The configuration treats `.js` files as JSX:
+
+```javascript
+esbuild: {
+  loader: "jsx",
+  include: /src\/.*\.jsx?$/,
+}
+```
+
+This enables JSX syntax in `.js` files without requiring `.jsx` extension.
+
+## Building for Production
+
+<Steps>
+  <Step title="Clean Previous Build (Optional)">
+    Remove the previous build directory:
+    
+    ```bash
+    rm -rf dist
+    ```
+  </Step>
+
+  <Step title="Set Environment Variables">
+    Configure production environment variables:
+    
+    ```bash
+    export VITE_STRIPE_PUBLIC_KEY=pk_live_...
+    ```
+    
+    Or create a `.env.production` file:
+    
+    ```bash .env.production
+    VITE_STRIPE_PUBLIC_KEY=pk_live_...
+    ```
+  </Step>
+
+  <Step title="Run Build Command">
+    Execute the production build:
+    
+    ```bash
+    npm run build
+    ```
+    
+    Vite will:
+    - Bundle and minify JavaScript
+    - Optimize CSS and remove unused styles
+    - Compress images and assets
+    - Generate content-hashed filenames
+    - Create source maps (optional)
+  </Step>
+
+  <Step title="Verify Build Output">
+    Check the `dist/` directory:
+    
+    ```bash
+    ls -la dist/
+    ```
+    
+    Expected output structure:
+    ```
+    dist/
+    ├── index.html
+    ├── assets/
+    │   ├── index-[hash].js
+    │   ├── index-[hash].css
+    │   └── [other-assets]
+    └── [static files]
+    ```
+  </Step>
+</Steps>
+
+## Build Output Structure
+
+After running `npm run build`, the `dist/` directory contains:
+
+```
+dist/
+├── index.html              # Main HTML entry point
+├── assets/                 # Bundled and hashed assets
+│   ├── index-a1b2c3d4.js  # Main application bundle (minified)
+│   ├── index-e5f6g7h8.css # Compiled styles (minified)
+│   ├── vendor-i9j0k1l2.js # Third-party dependencies
+│   └── *.svg, *.png, *.jpg # Optimized images
+└── favicon.svg             # Static assets (copied as-is)
+```
+
+### Asset Optimization
+
+- **JavaScript**: Minified, tree-shaken, code-split
+- **CSS**: Minified, unused styles removed
+- **Images**: Optimized and compressed
+- **Fonts**: Included if used in CSS
+- **Content Hashing**: Files have unique hashes for cache busting
+
+## Environment Variables
+
+### Configuration
+
+Vite uses `import.meta.env` for environment variables. Variables must be prefixed with `VITE_` to be exposed to the client:
+
+```javascript
+const apiKey = import.meta.env.VITE_STRIPE_PUBLIC_KEY;
+```
+
+### Required Variables
+
+```bash .env.production
+# Stripe public key (production)
+VITE_STRIPE_PUBLIC_KEY=pk_live_...
+```
+
+<Warning>
+  Environment variables are **embedded at build time**. Changes require rebuilding the application.
+</Warning>
+
+### Example Usage
+
+From `src/guards/stripe/stripeConfig.js`:
+
+```javascript
+const STRIPE_PUBLIC_KEY = import.meta.env.VITE_STRIPE_PUBLIC_KEY || 'pk_test_...';
+
+if (!STRIPE_PUBLIC_KEY || STRIPE_PUBLIC_KEY === 'pk_test_...') {
+  console.error('❌ STRIPE_PUBLIC_KEY not configured');
+  throw new Error('Stripe public key is not configured');
+}
+```
+
+### Environment Files
+
+Vite loads environment variables from:
+
+- `.env` - Loaded in all cases
+- `.env.local` - Loaded in all cases, ignored by git
+- `.env.production` - Only loaded in production mode
+- `.env.production.local` - Only loaded in production mode, ignored by git
+
+<Warning>
+  **Never commit `.env.local` or `.env.production.local` files to version control.** These files should contain sensitive keys and credentials.
+</Warning>
+
+## Build Optimization
+
+### Code Splitting
+
+Vite automatically splits code into:
+
+- **Main bundle**: Application code
+- **Vendor bundle**: Third-party dependencies (React, Redux, etc.)
+- **Dynamic imports**: Lazy-loaded components
+
+### Tree Shaking
+
+Unused code is automatically removed during the build process. To maximize tree shaking:
+
+- Use ES6 imports (`import`/`export`)
+- Avoid default exports for libraries
+- Import only what you need:
+
+```javascript
+// Good - tree-shakeable
+import { IconCheck, IconX } from '@tabler/icons-react';
+
+// Bad - imports entire library
+import * as TablerIcons from '@tabler/icons-react';
+```
+
+### Minification
+
+Vite uses esbuild for fast JavaScript minification:
+
+- Variable name mangling
+- Dead code elimination
+- Whitespace removal
+- Comment removal
+
+## Production Build Size
+
+Monitor build size to ensure optimal performance:
+
+```bash
+npm run build
+```
+
+Vite displays the build output with gzipped sizes:
+
+```
+dist/assets/index-a1b2c3d4.js   245.67 kB │ gzip: 78.23 kB
+dist/assets/vendor-e5f6g7h8.js  512.34 kB │ gzip: 156.78 kB
+```
+
+<Warning>
+  Large bundle sizes (> 500 kB gzipped) can impact initial load time. Consider code splitting and lazy loading for better performance.
+</Warning>
+
+## Preview Production Build
+
+Test the production build locally before deploying:
+
+```bash
+npm run preview
+```
+
+This serves the `dist/` directory on `http://localhost:4173` (or another available port).
+
+**Use preview to verify:**
+- Application loads correctly
+- Routes work as expected
+- Environment variables are set
+- Assets load properly
+
+## Build Modes
+
+### Development Mode
+
+```bash
+npm run dev
+```
+
+- Fast HMR (Hot Module Replacement)
+- Source maps enabled
+- No minification
+- Development warnings enabled
+
+### Production Mode
+
+```bash
+npm run build
+```
+
+- Optimized bundles
+- Minified code
+- Tree shaking enabled
+- Production warnings disabled
+
+## Troubleshooting
+
+<Accordion title="Build fails with 'out of memory' error">
+  **Solution:**
+  
+  Increase Node.js memory limit:
+  
+  ```bash
+  NODE_OPTIONS=--max-old-space-size=4096 npm run build
+  ```
+</Accordion>
+
+<Accordion title="Environment variables not available in production">
+  **Solution:**
+  
+  1. Verify variables are prefixed with `VITE_`
+  2. Check `.env.production` file exists
+  3. Rebuild after changing environment variables:
+     ```bash
+     npm run build
+     ```
+</Accordion>
+
+<Accordion title="Build succeeds but application doesn't work">
+  **Solution:**
+  
+  1. Test the build locally:
+     ```bash
+     npm run preview
+     ```
+  
+  2. Check browser console for errors
+  3. Verify Firebase configuration in `src/guards/firebase/firebase.js`
+  4. Ensure environment variables are set correctly
+</Accordion>
+
+<Accordion title="Large bundle size warning">
+  **Solution:**
+  
+  1. Analyze bundle composition:
+     ```bash
+     npm install -D rollup-plugin-visualizer
+     ```
+  
+  2. Add to `vite.config.js`:
+     ```javascript
+     import { visualizer } from 'rollup-plugin-visualizer';
+     
+     export default defineConfig({
+       plugins: [visualizer()],
+     });
+     ```
+  
+  3. Run build and open `stats.html` to see bundle breakdown
+  4. Consider lazy loading large components or libraries
+</Accordion>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Firebase Hosting" icon="rocket" href="/deployment/firebase-hosting">
+    Deploy your built application to Firebase Hosting
+  </Card>
+  
+  <Card title="Production Checklist" icon="clipboard-check" href="/deployment/production-checklist">
+    Complete pre-deployment checklist
+  </Card>
+</CardGroup>

@@ -1,0 +1,562 @@
+---
+title: 'Production Checklist'
+description: 'Pre-deployment checklist for TradeMaster Transactions Portales'
+icon: 'clipboard-check'
+---
+
+## Overview
+
+Before deploying TradeMaster Transactions Portales to production, complete this comprehensive checklist to ensure security, performance, and reliability.
+
+## Security Checklist
+
+### Firebase Configuration
+
+<Steps>
+  <Step title="Verify Firebase Project Settings">
+    - Confirm production Firebase project ID: `trademastertransaction-project`
+    - Verify Firebase configuration in `src/guards/firebase/firebase.js`
+    - Ensure API keys are restricted in Firebase Console
+  </Step>
+
+  <Step title="Configure Firebase Security Rules">
+    Review and update Firestore security rules:
+    
+    ```javascript firestore.rules
+    rules_version = '2';
+    service cloud.firestore {
+      match /databases/{database}/documents {
+        // Require authentication for all reads/writes
+        match /{document=**} {
+          allow read, write: if request.auth != null;
+        }
+      }
+    }
+    ```
+    
+    Deploy rules:
+    ```bash
+    firebase deploy --only firestore:rules
+    ```
+  </Step>
+
+  <Step title="Configure Storage Security Rules">
+    Review Firebase Storage rules to ensure proper access control:
+    
+    ```javascript storage.rules
+    rules_version = '2';
+    service firebase.storage {
+      match /b/{bucket}/o {
+        match /{allPaths=**} {
+          allow read: if request.auth != null;
+          allow write: if request.auth != null;
+        }
+      }
+    }
+    ```
+    
+    Deploy rules:
+    ```bash
+    firebase deploy --only storage
+    ```
+  </Step>
+
+  <Step title="Review Authentication Settings">
+    - Enable only required authentication providers
+    - Configure authorized domains in Firebase Console
+    - Set up email templates for password reset
+    - Enable account enumeration protection
+  </Step>
+</Steps>
+
+### Environment Variables
+
+<Warning>
+  **Never commit sensitive keys to version control.** Use environment variables for all secrets.
+</Warning>
+
+<Steps>
+  <Step title="Verify Production Environment Variables">
+    Ensure the following variables are set:
+    
+    ```bash .env.production
+    # Stripe Production Key
+    VITE_STRIPE_PUBLIC_KEY=pk_live_...
+    ```
+  </Step>
+
+  <Step title="Validate Environment Configuration">
+    Check that environment variables are loaded:
+    
+    ```javascript
+    // Should use production key, not test key
+    const key = import.meta.env.VITE_STRIPE_PUBLIC_KEY;
+    console.assert(key.startsWith('pk_live_'), 'Using production Stripe key');
+    ```
+  </Step>
+
+  <Step title="Remove Development Keys">
+    - Remove or disable test API keys
+    - Ensure no hardcoded credentials in source code
+    - Verify `.env.local` is in `.gitignore`
+  </Step>
+</Steps>
+
+### API Security
+
+<Steps>
+  <Step title="Restrict Firebase API Keys">
+    In Firebase Console > Project Settings > General:
+    
+    1. Restrict API key usage to specific domains
+    2. Add authorized domains:
+       - `trademastertransaction-protales.web.app`
+       - Your custom domain (if applicable)
+    3. Remove localhost and development URLs
+  </Step>
+
+  <Step title="Configure CORS">
+    Ensure Firebase Functions have proper CORS configuration for production domains only.
+  </Step>
+
+  <Step title="Enable Rate Limiting">
+    - Configure Firebase App Check for abuse protection
+    - Set up rate limiting on Cloud Functions
+    - Monitor for unusual traffic patterns
+  </Step>
+</Steps>
+
+### Payment Security
+
+<Steps>
+  <Step title="Verify Stripe Configuration">
+    - Use production Stripe API keys (`pk_live_...`, `sk_live_...`)
+    - Enable Stripe radar for fraud detection
+    - Configure webhook endpoints for payment events
+    - Test webhook signature verification
+  </Step>
+
+  <Step title="Validate Payment Flow">
+    - Test complete payment process with real cards
+    - Verify refund functionality
+    - Test error handling for failed payments
+    - Confirm proper receipt/confirmation emails
+  </Step>
+
+  <Step title="Configure Mercantil API (if applicable)">
+    - Verify production credentials for Mercantil payment gateway
+    - Test TDC, TDD, and C2P payment methods
+    - Validate BCV exchange rate integration
+  </Step>
+</Steps>
+
+## Performance Checklist
+
+### Build Optimization
+
+<Steps>
+  <Step title="Run Production Build">
+    ```bash
+    npm run build
+    ```
+    
+    Verify build completes without errors.
+  </Step>
+
+  <Step title="Check Bundle Sizes">
+    Review build output for excessive bundle sizes:
+    
+    ```
+    dist/assets/index-[hash].js   < 300 kB (gzipped)
+    dist/assets/vendor-[hash].js  < 200 kB (gzipped)
+    ```
+    
+    <Warning>
+      Bundles exceeding 500 kB (gzipped) may cause slow initial load times.
+    </Warning>
+  </Step>
+
+  <Step title="Analyze Bundle Composition">
+    Use bundle analyzer to identify large dependencies:
+    
+    ```bash
+    npm install -D rollup-plugin-visualizer
+    ```
+    
+    Add to `vite.config.js` and review `stats.html` after build.
+  </Step>
+
+  <Step title="Enable Code Splitting">
+    Lazy load routes and components:
+    
+    ```javascript
+    import { lazy, Suspense } from 'react';
+    
+    const PurchaseOrder = lazy(() => import('./views/purchaseOrder/PurchaseOrder'));
+    
+    function App() {
+      return (
+        <Suspense fallback={<div>Loading...</div>}>
+          <PurchaseOrder />
+        </Suspense>
+      );
+    }
+    ```
+  </Step>
+</Steps>
+
+### Firebase Optimization
+
+<Steps>
+  <Step title="Configure Firestore Indexing">
+    Create composite indexes for common queries:
+    
+    ```bash
+    firebase deploy --only firestore:indexes
+    ```
+  </Step>
+
+  <Step title="Optimize Firebase Functions">
+    - Set appropriate memory and timeout limits
+    - Use Firebase Function v2 for better performance
+    - Enable automatic scaling
+    - Review cold start times
+  </Step>
+
+  <Step title="Enable Long Polling (Already Configured)">
+    Verify Firestore configuration includes:
+    
+    ```javascript
+    const db = initializeFirestore(app, {
+      experimentalForceLongPolling: true,
+    });
+    ```
+  </Step>
+</Steps>
+
+### Asset Optimization
+
+<Steps>
+  <Step title="Optimize Images">
+    - Compress images before deployment
+    - Use appropriate formats (WebP, AVIF)
+    - Implement lazy loading for images
+  </Step>
+
+  <Step title="Configure Caching">
+    Firebase Hosting automatically sets cache headers, but verify:
+    
+    - Static assets: Long cache duration
+    - `index.html`: Short cache duration
+  </Step>
+
+  <Step title="Enable CDN">
+    Firebase Hosting uses global CDN by default. Verify in Firebase Console > Hosting.
+  </Step>
+</Steps>
+
+## Testing Checklist
+
+### Functional Testing
+
+<Steps>
+  <Step title="Test Authentication Flow">
+    - Sign up with new account
+    - Log in with existing account
+    - Password reset functionality
+    - Sign out and session management
+  </Step>
+
+  <Step title="Test Event Management">
+    - Create and view events
+    - List event sales
+    - Lock/unlock tickets
+    - Search and filter functionality
+  </Step>
+
+  <Step title="Test Purchase Flow">
+    - Add items to cart
+    - Complete checkout process
+    - Test all payment methods (Stripe, Mercantil)
+    - Verify order confirmation emails
+  </Step>
+
+  <Step title="Test Mobile Payments">
+    - Mobile payment via BCV
+    - Payment confirmation
+    - Receipt generation
+  </Step>
+</Steps>
+
+### Cross-Browser Testing
+
+- Chrome (latest)
+- Firefox (latest)
+- Safari (latest)
+- Edge (latest)
+- Mobile browsers (iOS Safari, Chrome Mobile)
+
+### Responsive Testing
+
+- Desktop (1920x1080, 1366x768)
+- Tablet (iPad, Android tablets)
+- Mobile (iPhone, Android phones)
+
+### Error Handling
+
+<Steps>
+  <Step title="Test Error Scenarios">
+    - Network errors (offline mode)
+    - Failed API requests
+    - Invalid form submissions
+    - Payment failures
+    - Session expiration
+  </Step>
+
+  <Step title="Verify Error Messages">
+    - User-friendly error messages displayed
+    - Technical errors logged to console
+    - Toast notifications working correctly
+  </Step>
+</Steps>
+
+## Monitoring Checklist
+
+### Firebase Monitoring
+
+<Steps>
+  <Step title="Enable Firebase Performance Monitoring">
+    ```bash
+    firebase deploy --only performance
+    ```
+    
+    Monitor:
+    - Page load times
+    - Network request latency
+    - Firebase Function execution times
+  </Step>
+
+  <Step title="Configure Firebase Crashlytics (Optional)">
+    Set up error tracking for production issues.
+  </Step>
+
+  <Step title="Set Up Firebase Alerts">
+    Configure alerts in Firebase Console for:
+    - High error rates
+    - Slow function execution
+    - Quota limits
+  </Step>
+</Steps>
+
+### Analytics
+
+<Steps>
+  <Step title="Configure Google Analytics (Optional)">
+    Track user behavior and conversion rates.
+  </Step>
+
+  <Step title="Monitor Key Metrics">
+    - User sign-ups
+    - Purchase completion rate
+    - Payment method usage
+    - Error rates
+  </Step>
+</Steps>
+
+## Pre-Deployment Verification
+
+<Steps>
+  <Step title="Test Production Build Locally">
+    ```bash
+    npm run build
+    npm run preview
+    ```
+    
+    Verify application works correctly on `http://localhost:4173`.
+  </Step>
+
+  <Step title="Review Firebase Console">
+    - Verify project settings
+    - Check quota usage
+    - Review security rules
+    - Confirm billing is enabled
+  </Step>
+
+  <Step title="Create Deployment Backup">
+    - Backup Firestore data
+    - Export current security rules
+    - Document current Firebase Function versions
+  </Step>
+
+  <Step title="Notify Stakeholders">
+    - Inform team of deployment schedule
+    - Coordinate with customer support
+    - Prepare rollback plan
+  </Step>
+</Steps>
+
+## Deployment
+
+<Steps>
+  <Step title="Deploy to Firebase Hosting">
+    ```bash
+    firebase deploy --only hosting
+    ```
+  </Step>
+
+  <Step title="Verify Deployment">
+    Visit `https://trademastertransaction-protales.web.app` and verify:
+    
+    - Application loads correctly
+    - All routes work
+    - Authentication functions
+    - Payments process successfully
+  </Step>
+
+  <Step title="Monitor Post-Deployment">
+    - Check Firebase Console for errors
+    - Monitor performance metrics
+    - Review user reports
+    - Watch for anomalies
+  </Step>
+</Steps>
+
+## Post-Deployment Tasks
+
+<Steps>
+  <Step title="Monitor Error Rates">
+    Check Firebase Console > Analytics > Errors for the first 24 hours.
+  </Step>
+
+  <Step title="Verify Critical Flows">
+    - User registration
+    - Payment processing
+    - Event management
+    - Email notifications
+  </Step>
+
+  <Step title="Review Performance">
+    - Page load times
+    - API response times
+    - Database query performance
+  </Step>
+
+  <Step title="Document Deployment">
+    - Record deployment date and time
+    - Note any issues encountered
+    - Update internal documentation
+  </Step>
+</Steps>
+
+## Rollback Procedure
+
+If critical issues are discovered:
+
+<Steps>
+  <Step title="Identify Issue">
+    - Review error logs
+    - Reproduce the issue
+    - Assess severity
+  </Step>
+
+  <Step title="Execute Rollback">
+    In Firebase Console > Hosting > Release history:
+    
+    1. Locate previous stable version
+    2. Click "Rollback"
+    3. Confirm rollback
+  </Step>
+
+  <Step title="Verify Rollback">
+    - Test critical functionality
+    - Monitor error rates
+    - Communicate with stakeholders
+  </Step>
+
+  <Step title="Root Cause Analysis">
+    - Identify the cause of the issue
+    - Implement fix
+    - Test thoroughly before redeploying
+  </Step>
+</Steps>
+
+## Troubleshooting
+
+<Accordion title="Application shows blank page after deployment">
+  **Possible Causes:**
+  
+  1. Missing environment variables
+  2. JavaScript errors in production build
+  3. Incorrect Firebase configuration
+  
+  **Solutions:**
+  
+  1. Check browser console for errors
+  2. Verify environment variables are set:
+     ```bash
+     VITE_STRIPE_PUBLIC_KEY=pk_live_...
+     ```
+  3. Test build locally:
+     ```bash
+     npm run preview
+     ```
+  4. Redeploy after fixing issues
+</Accordion>
+
+<Accordion title="Authentication not working in production">
+  **Solution:**
+  
+  1. Add production domain to Firebase authorized domains:
+     Firebase Console > Authentication > Settings > Authorized domains
+  
+  2. Add:
+     - `trademastertransaction-protales.web.app`
+     - `trademastertransaction-protales.firebaseapp.com`
+     - Custom domain (if applicable)
+  
+  3. Redeploy if Firebase config changed
+</Accordion>
+
+<Accordion title="Payment processing fails in production">
+  **Solution:**
+  
+  1. Verify Stripe production key is set:
+     ```bash
+     VITE_STRIPE_PUBLIC_KEY=pk_live_...
+     ```
+  
+  2. Check Stripe Dashboard for error logs
+  3. Verify webhook endpoints are configured
+  4. Test with Stripe test cards in production mode
+  5. Rebuild and redeploy:
+     ```bash
+     npm run build
+     firebase deploy --only hosting
+     ```
+</Accordion>
+
+<Accordion title="Slow page load times">
+  **Solution:**
+  
+  1. Analyze bundle sizes:
+     ```bash
+     npm run build
+     ```
+  
+  2. Check for large dependencies
+  3. Implement code splitting and lazy loading
+  4. Optimize images and assets
+  5. Enable Firebase Performance Monitoring to identify bottlenecks
+</Accordion>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Firebase Hosting" icon="rocket" href="/deployment/firebase-hosting">
+    Review Firebase Hosting deployment process
+  </Card>
+  
+  <Card title="Build Process" icon="gears" href="/deployment/build-process">
+    Understand Vite build configuration
+  </Card>
+</CardGroup>

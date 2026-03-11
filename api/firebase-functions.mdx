@@ -1,0 +1,143 @@
+---
+title: 'Firebase Cloud Functions'
+description: 'Core Firebase Cloud Functions for TradeMaster Transactions'
+icon: 'fire'
+---
+
+## Overview
+
+All Firebase Cloud Functions are initialized and exported from `src/guards/firebase/firebase.js`. These functions use Firebase's `httpsCallable` interface to communicate with the backend.
+
+## Initialization
+
+Functions are initialized using the Firebase Functions SDK:
+
+```javascript
+import { getFunctions, httpsCallable } from "firebase/functions";
+
+const functions = getFunctions(app);
+const myFunction = httpsCallable(functions, "function_name");
+```
+
+## Available Functions
+
+The following Firebase Cloud Functions are available in the application:
+
+### Event Operations
+- `list_events_clients` - List all events for a client
+- `tickets_list_event_sales_virtual` - Get ticket sales data for an event
+
+### Ticket Operations
+- `tickets_lock_virtual` - Lock tickets for reservation
+- `tickets_unlock_param_virtual` - Unlock previously reserved tickets
+
+### Order Operations
+- `order_created` - Create a new order
+- `send_email` - Send confirmation emails
+
+### Payment Operations
+
+#### Stripe
+- `stripe_create_payment_intent` - Create Stripe payment intent
+- `stripe_confirm_payment` - Confirm Stripe payment
+- `stripe_get_payment_intent` - Get payment intent details
+
+#### Mercantil Bank
+- `api_mercantil_auth` - Authenticate debit card
+- `api_mercantil_tdc_pay` - Process credit card payment
+- `api_mercantil_tdd_pay` - Process debit card payment
+- `api_mercantil_c2p_pay` - Process C2P (Pago Móvil) payment
+
+#### BCV (Banco de Venezuela)
+- `mobile_payment_bcv` - Verify mobile payment with BCV
+
+## Usage Pattern
+
+All functions follow the same usage pattern:
+
+```javascript
+import { functionName } from '@/guards/firebase/firebase';
+
+try {
+  const response = await functionName({ param1: value1, param2: value2 });
+  
+  if (response.data.success) {
+    // Handle success
+    console.log(response.data);
+  } else {
+    // Handle error
+    console.error(response.data.error);
+  }
+} catch (error) {
+  console.error('Function call failed:', error);
+}
+```
+
+<Note>
+  All Firebase Cloud Functions return a Promise that resolves to an object with a `data` property containing the response.
+</Note>
+
+## Error Handling
+
+<Warning>
+  Always wrap Firebase function calls in try-catch blocks to handle network errors and function execution failures.
+</Warning>
+
+```javascript
+try {
+  const response = await myFunction({ data });
+  
+  // Check for business logic errors
+  if (!response.data.valido) {
+    throw new Error(response.data.error || 'Operation failed');
+  }
+  
+  // Process successful response
+  return response.data;
+} catch (error) {
+  if (error.code === 'functions/unauthenticated') {
+    // Handle authentication error
+  } else if (error.code === 'functions/permission-denied') {
+    // Handle permission error
+  } else {
+    // Handle other errors
+    console.error('Function error:', error.message);
+  }
+  throw error;
+}
+```
+
+## Firebase Configuration
+
+The Firebase app is configured with the following settings:
+
+```javascript
+const firebaseConfig = {
+  apiKey: "AIzaSyD1bPm1YvtQKwAyXNUxE--YbkbEwydCuCI",
+  authDomain: "trademastertransaction-project.firebaseapp.com",
+  projectId: "trademastertransaction-project",
+  storageBucket: "trademastertransaction-project.appspot.com",
+  messagingSenderId: "324510208107",
+  appId: "1:324510208107:web:63af97fd7bea1f9e93212e"
+};
+```
+
+## Firestore Configuration
+
+Firestore is initialized with long polling enabled for better compatibility:
+
+```javascript
+const db = initializeFirestore(app, {
+  experimentalForceLongPolling: true,
+});
+```
+
+<Note>
+  Long polling is enabled to ensure compatibility across different network environments and to avoid WebSocket connection issues.
+</Note>
+
+## Related Resources
+
+- [Payment Method APIs](/api/payment-methods)
+- [Event Operations](/api/event-operations)
+- [Ticket Operations](/api/ticket-operations)

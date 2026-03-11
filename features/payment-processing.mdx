@@ -1,0 +1,705 @@
+---
+title: 'Payment Processing'
+description: 'Multi-gateway payment processing with Stripe, Mercantil, and BCV mobile payments'
+icon: 'credit-card'
+---
+
+## Overview
+
+TradeMaster supports multiple payment methods including international credit cards via Stripe, domestic Venezuelan payment methods via Mercantil Bank API, and BCV mobile payments. The system provides a unified interface while handling the complexities of each payment gateway.
+
+## Supported Payment Methods
+
+<Tabs>
+  <Tab title="Stripe (International)">
+    International credit and debit cards processed via Stripe:
+    
+    - Visa
+    - Mastercard
+    - American Express
+    - Apple Pay / Google Pay (via Stripe Payment Element)
+  </Tab>
+  
+  <Tab title="Mercantil Bank API">
+    Venezuelan payment methods via Mercantil:
+    
+    - **Tarjeta de Crédito**: Domestic credit cards
+    - **Tarjeta de Débito**: Domestic debit cards with 2FA
+    - **Pago Móvil**: Mobile payment with authentication
+    - **C2P (Card to Phone)**: Card-to-phone transfers
+  </Tab>
+  
+  <Tab title="BCV Mobile Payment">
+    Venezuelan Central Bank mobile payments:
+    
+    - Banco de Venezuela mobile payments
+    - Reference number validation
+    - Real-time verification
+  </Tab>
+  
+  <Tab title="Other Methods">
+    Additional payment options:
+    
+    - Zelle (US dollar transfers)
+    - Wire transfers
+    - Bank transfers
+  </Tab>
+</Tabs>
+
+## Stripe Integration
+
+### Configuration
+
+Stripe is initialized using environment variables:
+
+```javascript title="src/guards/stripe/stripeConfig.js"
+import { loadStripe } from '@stripe/stripe-js';
+
+const STRIPE_PUBLIC_KEY = import.meta.env.VITE_STRIPE_PUBLIC_KEY || 'pk_test_...';
+
+let stripePromise = null;
+
+export const initializeStripe = async () => {
+  if (!STRIPE_PUBLIC_KEY || STRIPE_PUBLIC_KEY === 'pk_test_...') {
+    console.error('❌ STRIPE_PUBLIC_KEY no está configurada.');
+    throw new Error('La clave pública de Stripe no está configurada');
+  }
+
+  if (!stripePromise) {
+    stripePromise = loadStripe(STRIPE_PUBLIC_KEY);
+  }
+  return stripePromise;
+};
+
+export const getStripePromise = () => stripePromise;
+export default stripePromise;
+```
+
+### Firebase Cloud Functions
+
+Stripe operations are handled via Firebase Cloud Functions:
+
+```javascript title="src/guards/firebase/firebase.js:36-38"
+import { getFunctions, httpsCallable } from "firebase/functions";
+
+const functions = getFunctions(app);
+
+export const stripe_create_payment_intent = httpsCallable(
+  functions, 
+  "stripe_create_payment_intent"
+);
+
+export const stripe_confirm_payment = httpsCallable(
+  functions, 
+  "stripe_confirm_payment"
+);
+
+export const stripe_get_payment_intent = httpsCallable(
+  functions, 
+  "stripe_get_payment_intent"
+);
+```
+
+### Payment Intent Flow
+
+<Steps>
+  <Step title="Create Payment Intent">
+    Create a payment intent on the server with the order amount:
+    
+    ```javascript
+    const createPaymentIntent = async (amount, currency = 'usd') => {
+      try {
+        const response = await stripe_create_payment_intent({
+          amount: Math.round(amount * 100), // Convert to cents
+          currency: currency,
+          metadata: {
+            event_id: eventId,
+            user_id: userId,
+            ticket_count: selectedSeats.length
+          }
+        });
+        
+        setStripeClientSecret(response.data.clientSecret);
+        setStripePaymentIntentId(response.data.paymentIntentId);
+      } catch (error) {
+        console.error('Error creating payment intent:', error);
+      }
+    };
+    ```
+  </Step>
+  
+  <Step title="Collect Payment Details">
+    Use Stripe Elements to securely collect card information:
+    
+    ```javascript title="src/views/purchaseOrder/PurchaseOrder.js:36-83"
+    const StripeCardInput = ({ onCardElementReady }) => {
+      const stripe = useStripe();
+      const elements = useElements();
+
+      useEffect(() => {
+        if (stripe && elements && onCardElementReady) {
+          const cardElement = elements.getElement(CardElement);
+          onCardElementReady(cardElement);
+        }
+      }, [stripe, elements, onCardElementReady]);
+
+      return (
+        <div className="grid gap-2">
+          <Label>Información de la Tarjeta</Label>
+          <div className="p-4 border rounded-md">
+            <CardElement
+              options={{
+                style: {
+                  base: {
+                    fontSize: '16px',
+                    color: 'hsl(var(--foreground))',
+                    fontFamily: '"Inter", sans-serif',
+                    '::placeholder': {
+                      color: 'hsl(var(--muted-foreground))',
+                    },
+                  },
+                  invalid: {
+                    color: 'hsl(var(--destructive))',
+                  },
+                },
+              }}
+            />
+          </div>
+        </div>
+      );
+    };
+    ```
+  </Step>
+  
+  <Step title="Confirm Payment">
+    Confirm the payment with Stripe:
+    
+    ```javascript
+    const confirmStripePayment = async (cardElement) => {
+      try {
+        setStripeProcessing(true);
+        
+        const { error, paymentIntent } = await stripe.confirmCardPayment(
+          stripeClientSecret,
+          {
+            payment_method: {
+              card: cardElement,
+              billing_details: {
+                name: stripeInternationalInfo.cardholder_name,
+                email: stripeInternationalInfo.email,
+              },
+            },
+          }
+        );
+
+        if (error) {
+          throw new Error(error.message);
+        }
+
+        if (paymentIntent.status === 'succeeded') {
+          // Payment successful - create order
+          await createOrder(paymentIntent.id);
+        }
+      } catch (error) {
+        console.error('Error confirming payment:', error);
+        toast.error('Error processing payment');
+      } finally {
+        setStripeProcessing(false);
+      }
+    };
+    ```
+  </Step>
+  
+  <Step title="Create Order">
+    Once payment is confirmed, create the order and assign tickets:
+    
+    ```javascript
+    const createOrder = async (paymentIntentId) => {
+      const orderData = {
+        event_id: eventId,
+        user_id: userId,
+        tickets: selectedSeats.map(seat => seat.ticket_id),
+        payment_method: 'Tarjeta de Crédito Internacional',
+        payment_intent_id: paymentIntentId,
+        amount: totalAmount,
+        status: 'completed'
+      };
+      
+      await order_created(orderData);
+      navigate(`/purchaseSuccess/${eventId}/${orderId}`);
+    };
+    ```
+  </Step>
+</Steps>
+
+### Stripe Elements Wrapper
+
+```javascript title="src/views/purchaseOrder/PurchaseOrder.js:86-105"
+const StripeElementsWrapper = ({ stripePromise, children }) => {
+  if (!stripePromise) {
+    return (
+      <div className="p-4 bg-yellow-50 text-yellow-700 border rounded">
+        <p className="text-sm">⏳ Inicializando Stripe...</p>
+      </div>
+    );
+  }
+
+  return <Elements stripe={stripePromise}>{children}</Elements>;
+};
+```
+
+## Mercantil Bank Integration
+
+### Credit Card Payment
+
+Domestic Venezuelan credit cards:
+
+```javascript title="Credit Card Processing"
+const processCreditCardPayment = async () => {
+  try {
+    const response = await api_mercantil_tdc_pay({
+      customer_id: `${creditCardInfo.identification_type}${creditCardInfo.identification_number}`,
+      card_number: creditCardInfo.card_number,
+      expiry_date: creditCardInfo.expiry_date,
+      cvv: creditCardInfo.cvv,
+      cardholder_name: creditCardInfo.cardholder_name,
+      amount: totalAmount,
+      currency: 'VES',
+      description: `Tickets for ${eventDetails.title}`,
+      metadata: {
+        event_id: eventId,
+        user_id: userId
+      }
+    });
+
+    if (response.data.status === 'approved') {
+      await createOrder(response.data.transaction_id);
+    } else {
+      toast.error(`Pago rechazado: ${response.data.message}`);
+    }
+  } catch (error) {
+    console.error('Error processing credit card:', error);
+    toast.error('Error al procesar el pago');
+  }
+};
+```
+
+### Debit Card with 2FA
+
+Debit cards require two-factor authentication:
+
+```javascript title="src/views/purchaseOrder/PurchaseOrder.js:568-654"
+const authenticateDebitCard = async () => {
+  if (!debitCardInfo.card_number || !debitCardInfo.identification_number) {
+    toast.error('Ingrese el número de tarjeta y la identificación');
+    return;
+  }
+
+  try {
+    setDebitCardAuth(prev => ({ 
+      ...prev, 
+      authInProgress: true, 
+      authError: null 
+    }));
+
+    // Step 1: Authenticate the card
+    const authResponse = await api_mercantil_auth({
+      customer_id: `${debitCardInfo.identification_type}${debitCardInfo.identification_number}`,
+      card_number: debitCardInfo.card_number,
+      ipaddress: ipAddress,
+      browser_agent: navigator.userAgent,
+      manufacturer: null
+    });
+
+    if (authResponse?.data?.authentication_info.trx_status === "approved") {
+      setDebitCardAuth(prev => ({
+        ...prev,
+        isAuthenticated: true,
+        authInProgress: false,
+        authData: authResponse.data
+      }));
+
+      toast.success('Tarjeta autenticada correctamente');
+    } else {
+      throw new Error(authResponse?.data?.message || 'Authentication failed');
+    }
+  } catch (error) {
+    setDebitCardAuth(prev => ({
+      ...prev,
+      isAuthenticated: false,
+      authInProgress: false,
+      authError: error.message
+    }));
+
+    toast.error('Error al autenticar la tarjeta');
+  }
+};
+
+// Step 2: Process the payment after authentication
+const processDebitCardPayment = async () => {
+  if (!debitCardAuth.isAuthenticated) {
+    toast.error('Por favor autentique la tarjeta primero');
+    return;
+  }
+
+  try {
+    const response = await api_mercantil_tdd_pay({
+      authentication_data: debitCardAuth.authData,
+      card_number: debitCardInfo.card_number,
+      expiry_date: debitCardInfo.expiry_date,
+      cvv: debitCardInfo.cvv,
+      twofactor_auth: debitCardInfo.twofactor_auth,
+      account_type: debitCardInfo.account_type,
+      amount: totalAmount,
+      currency: 'VES'
+    });
+
+    if (response.data.status === 'approved') {
+      await createOrder(response.data.transaction_id);
+    }
+  } catch (error) {
+    console.error('Error processing debit card:', error);
+  }
+};
+```
+
+### Mobile Payment (Pago Móvil)
+
+Two implementations depending on the bank:
+
+#### Mercantil Mobile Payment (API)
+
+```javascript title="Mercantil Pago Móvil"
+const processMercantilMobilePayment = async () => {
+  try {
+    const response = await api_mercantil_c2p_pay({
+      origin_bank: pagoMovilInfo.origin_bank,
+      phone: pagoMovilInfo.phone,
+      amount: totalAmount * usdCentralBank, // Convert to VES
+      currency: 'VES',
+      twofactor_auth: pagoMovilInfo.twofactor_auth,
+      metadata: {
+        event_id: eventId,
+        user_id: userId
+      }
+    });
+
+    if (response.data.status === 'approved') {
+      await createOrder(response.data.transaction_id);
+    }
+  } catch (error) {
+    console.error('Error processing mobile payment:', error);
+  }
+};
+```
+
+#### BCV Mobile Payment (Reference)
+
+```javascript title="src/views/purchaseOrder/PurchaseOrder.js:776-951"
+const processBCVMobilePayment = async () => {
+  if (!pagoMovilInfo.reference_number || pagoMovilInfo.reference_number.length < 8) {
+    toast.error('Ingrese un número de referencia válido (mínimo 8 dígitos)');
+    return;
+  }
+
+  try {
+    const response = await mobile_payment_bcv({
+      origin_bank: pagoMovilInfo.origin_bank,
+      phone: pagoMovilInfo.phone,
+      reference_number: pagoMovilInfo.reference_number,
+      pagador_id_type: pagoMovilInfo.pagador_id_type,
+      pagador_id: pagoMovilInfo.pagador_id,
+      amount: totalAmount * usdCentralBank,
+      expected_amount: truncateDecimals(totalAmount * usdCentralBank, 2),
+      currency: 'VES',
+      metadata: {
+        event_id: eventId,
+        user_id: userId
+      }
+    });
+
+    if (response.data.status === 'approved') {
+      await createOrder(response.data.payment_id);
+    } else {
+      toast.error(`Pago no validado: ${response.data.message}`);
+    }
+  } catch (error) {
+    console.error('Error processing BCV mobile payment:', error);
+  }
+};
+```
+
+## Payment Method UI
+
+Dynamic payment method fields based on selection:
+
+```javascript title="src/views/purchaseOrder/PurchaseOrder.js:720-951"
+const renderPaymentFields = () => {
+  switch (paymentMethod) {
+    case "Tarjeta de Crédito Internacional":
+      return (
+        <StripeElementsWrapper stripePromise={stripePromise}>
+          <StripeCardInput onCardElementReady={setCardElementRef} />
+          <div className="grid gap-2 mt-4">
+            <Label htmlFor="cardholder_name">Nombre del Titular</Label>
+            <Input
+              id="cardholder_name"
+              value={stripeInternationalInfo.cardholder_name}
+              onChange={handleStripeInternationalInfoChange}
+            />
+          </div>
+        </StripeElementsWrapper>
+      );
+
+    case "Pago Móvil":
+      const selectedPagoMovilMethod = paymentMethodsData.find(
+        p => p.method === paymentMethod
+      );
+      const bankName = selectedPagoMovilMethod?.data?.bank || "";
+      const isMercantil = bankName === "Mercantil";
+      const isBancoVenezuela = bankName === "Banco de Venezuela";
+
+      return (
+        <div className="space-y-4 mt-4">
+          <h3 className="font-semibold text-lg">Detalles de Pago Móvil</h3>
+          
+          {isBancoVenezuela && (
+            <div className="p-4 border border-blue-200 rounded-md bg-blue-50">
+              <h4 className="font-semibold text-sm mb-2">
+                Datos para realizar el Pago Móvil:
+              </h4>
+              <div className="space-y-1 text-sm">
+                <p><strong>Teléfono:</strong> 0414-208.75.52</p>
+                <p><strong>Cédula:</strong> J-506.143.755</p>
+                <p><strong>Banco:</strong> Banco de Venezuela - 0102</p>
+                <p><strong>Monto:</strong> BS {truncateDecimals(totalAmount * usdCentralBank, 2).toFixed(2)}</p>
+              </div>
+            </div>
+          )}
+
+          <div className="grid gap-4">
+            <div className="grid gap-2">
+              <Label htmlFor="origin_bank">Banco de Origen</Label>
+              <select
+                id="origin_bank"
+                value={pagoMovilInfo.origin_bank}
+                onChange={handlePagoMovilInfoChange}
+                className="w-full p-2 border rounded"
+              >
+                <option value="0102">Banco de Venezuela</option>
+                <option value="0134">Banesco</option>
+                <option value="0105">Mercantil</option>
+                <option value="0108">Provincial</option>
+                <option value="0114">Bancaribe</option>
+              </select>
+            </div>
+
+            {isMercantil && (
+              <div className="grid gap-2">
+                <Label htmlFor="twofactor_auth">Clave de Pago</Label>
+                <Input
+                  id="twofactor_auth"
+                  placeholder="Clave de pago recibida"
+                  value={pagoMovilInfo.twofactor_auth}
+                  onChange={handlePagoMovilInfoChange}
+                />
+              </div>
+            )}
+
+            {isBancoVenezuela && (
+              <div className="grid gap-2">
+                <Label htmlFor="reference_number">Número de Referencia</Label>
+                <Input
+                  id="reference_number"
+                  placeholder="Últimos 8 dígitos"
+                  maxLength={12}
+                  value={pagoMovilInfo.reference_number}
+                  onChange={handlePagoMovilInfoChange}
+                />
+                {pagoMovilInfo.reference_number && 
+                 pagoMovilInfo.reference_number.length < 8 && (
+                  <p className="text-xs text-red-500">
+                    ⚠️ La referencia debe tener mínimo 8 dígitos
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      );
+
+    case "Tarjeta de Crédito":
+      return (
+        <div className="space-y-4 mt-4">
+          <div className="grid gap-2">
+            <Label htmlFor="card_number">Número de Tarjeta</Label>
+            <Input
+              id="card_number"
+              placeholder="XXXX XXXX XXXX XXXX"
+              value={creditCardInfo.card_number}
+              maxLength={19}
+              onChange={handleCreditCardInfoChange}
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="grid gap-2">
+              <Label htmlFor="expiry_date">Fecha de Expiración</Label>
+              <Input
+                id="expiry_date"
+                placeholder="AAAA/MM"
+                value={creditCardInfo.expiry_date}
+                onChange={handleCreditCardInfoChange}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="cvv">CVV</Label>
+              <Input
+                id="cvv"
+                maxLength={3}
+                placeholder="123"
+                value={creditCardInfo.cvv}
+                onChange={handleCreditCardInfoChange}
+              />
+            </div>
+          </div>
+        </div>
+      );
+
+    default:
+      return null;
+  }
+};
+```
+
+## Order Creation
+
+Once payment is confirmed, create the order:
+
+```javascript title="Order Creation Flow"
+const createOrder = async (transactionId) => {
+  try {
+    const orderData = {
+      event_id: eventDetails.id,
+      client_id: eventDetails.client_id,
+      user_id: user.id,
+      buyer_info: buyerInfo,
+      recipient_info: isGiftPurchase ? recipientInfo : buyerInfo,
+      tickets: selectedSeats.map(seat => ({
+        ticket_id: seat.ticket_id,
+        seat_id: seat.id,
+        zone: seat.location,
+        price: seat.price
+      })),
+      payment_method: paymentMethod,
+      payment_transaction_id: transactionId,
+      amount: totalAmount,
+      currency: paymentMethod.includes('Internacional') ? 'USD' : 'VES',
+      status: 'completed',
+      created_at: new Date().toISOString()
+    };
+
+    const response = await order_created(orderData);
+
+    if (response.data.success) {
+      // Send confirmation email
+      await send_email({
+        to: buyerInfo.email,
+        template: 'order_confirmation',
+        data: {
+          order_id: response.data.order_id,
+          event_name: eventDetails.title,
+          tickets: selectedSeats
+        }
+      });
+
+      navigate(`/purchaseSuccess/${eventDetails.id}/${response.data.order_id}`);
+    }
+  } catch (error) {
+    console.error('Error creating order:', error);
+    toast.error('Error al crear la orden');
+  }
+};
+```
+
+## Exchange Rate Handling
+
+For Venezuelan bolivar payments, convert USD to VES:
+
+```javascript title="Exchange Rate Conversion"
+const usdCentralBank = useSelector(
+  (state) => state.configData?.config_data?.exchange_rates?.rates?.usd ?? 0
+);
+
+// Helper function to truncate decimals
+const truncateDecimals = (number, digits) => {
+  const multiplier = Math.pow(10, digits);
+  return Math.trunc(number * multiplier) / multiplier;
+};
+
+// Convert amount to VES
+const amountInVES = truncateDecimals(totalAmount * usdCentralBank, 2);
+```
+
+## Payment Validation
+
+```javascript title="src/views/purchaseOrder/PurchaseOrder.js:656-714"
+const isPaymentInfoValid = () => {
+  switch (paymentMethod) {
+    case "Pago Móvil":
+      const selectedMethod = paymentMethodsData.find(
+        p => p.method === paymentMethod
+      );
+      const bankName = selectedMethod?.data?.bank || "";
+
+      if (!pagoMovilInfo.origin_bank || !pagoMovilInfo.phone) {
+        return false;
+      }
+
+      if (bankName === "Mercantil") {
+        return pagoMovilInfo.twofactor_auth !== "";
+      }
+
+      if (bankName === "Banco de Venezuela") {
+        return pagoMovilInfo.pagador_id_type &&
+               pagoMovilInfo.pagador_id &&
+               pagoMovilInfo.reference_number &&
+               pagoMovilInfo.reference_number.length >= 8;
+      }
+      return true;
+
+    case "Tarjeta de Crédito":
+      return creditCardInfo.card_number !== "" &&
+             creditCardInfo.expiry_date !== "" &&
+             creditCardInfo.cvv !== "" &&
+             creditCardInfo.cardholder_name !== "" &&
+             creditCardInfo.identification_number !== "";
+
+    case "Tarjeta de Debito":
+      return debitCardAuth.isAuthenticated &&
+             debitCardInfo.cardholder_name !== "" &&
+             debitCardInfo.expiry_date !== "" &&
+             debitCardInfo.cvv !== "" &&
+             debitCardInfo.twofactor_auth !== "";
+
+    case "Tarjeta de Crédito Internacional":
+      return stripeInternationalInfo.cardholder_name !== "" &&
+             stripeInternationalInfo.email !== "";
+
+    default:
+      return false;
+  }
+};
+```
+
+## Best Practices
+
+1. **Never store sensitive card data** - Use tokenization for all card processing
+2. **Implement proper error handling** - Show user-friendly error messages
+3. **Validate payment info** before attempting to process
+4. **Use HTTPS** for all payment-related requests
+5. **Log all transactions** for audit and reconciliation purposes
+6. **Handle currency conversion** carefully to avoid rounding errors
+7. **Implement timeout handling** to release locked tickets if payment fails
+8. **Send confirmation emails** after successful payment
+9. **Store transaction IDs** for future reference and dispute resolution
+10. **Test with different payment methods** to ensure compatibility

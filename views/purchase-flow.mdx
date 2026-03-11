@@ -1,0 +1,710 @@
+---
+title: 'Purchase Flow Views'
+description: 'Multi-step ticket purchase process with seat selection and payment processing'
+---
+
+## Overview
+
+The purchase flow consists of two main views:
+- **PurchaseOrder** (`src/views/purchaseOrder/PurchaseOrder.js`) - Ticket selection and payment
+- **PurchaseSuccess** (`src/views/purchaseSuccess/PurchaseSuccess.js`) - Order confirmation
+
+## Purchase Order View
+
+**Route:** `/purchaseOrder/:idEvent`  
+**Guard:** `<AuthGuard>` - Requires authentication
+
+### Purpose
+
+Guides users through a multi-step process to select seats, enter buyer information, and complete payment for event tickets.
+
+## Checkout Steps
+
+<Steps>
+  <Step title="Select Seats">
+    Choose available seats or specify free assignment quantities
+  </Step>
+  <Step title="Enter Buyer Information">
+    Provide personal and contact details
+  </Step>
+  <Step title="Choose Payment Method">
+    Select from available payment options
+  </Step>
+  <Step title="Complete Payment">
+    Process transaction and create order
+  </Step>
+  <Step title="View Confirmation">
+    Redirect to success page with order details
+  </Step>
+</Steps>
+
+## State Management
+
+### Redux Integration
+
+```javascript
+const events = useSelector((state) => state.events.events);
+const user = useSelector((state) => state.auth.user);
+const portal = useSelector((state) => state.setup.Setup);
+const usdCentralBank = useSelector((state) => state.configData?.config_data?.exchange_rates?.rates?.usd ?? 0);
+const Banks = useSelector((state) => state.configData?.config_data?.banks?.ve ?? []);
+const document_type = useSelector((state) => state.configData?.config_data?.id_types?.data ?? []);
+```
+
+### Local State
+
+```javascript
+const [timeLeft, setTimeLeft] = useState(600); // 10 minute timer
+const [eventDetails, setEventDetails] = useState({});
+const [seatSections, setSeatSections] = useState({});
+const [selectedSeats, setSelectedSeats] = useState([]);
+const [paymentMethod, setPaymentMethod] = useState("Pago Móvil");
+const [checkoutStep, setCheckoutStep] = useState("select-seats");
+const [buyerInfo, setBuyerInfo] = useState({});
+const [isGiftPurchase, setIsGiftPurchase] = useState(false);
+const [recipientInfo, setRecipientInfo] = useState({});
+```
+
+## Seat Selection
+
+### Zone Types
+
+<CardGroup cols={2}>
+  <Card title="Assigned Seating" icon="chair">
+    Specific seat selection with visual grid
+  </Card>
+  <Card title="Free Assignment" icon="ticket">
+    Quantity-based selection, seats assigned automatically
+  </Card>
+</CardGroup>
+
+### Seat Data Structure
+
+```javascript
+const generateSeats = (zone, tickets) => {
+  if (zone.type === "Libre Asignación") {
+    const availableTickets = tickets.filter(t => t.status === true && t.status_offline !== true);
+    return {
+      type: "Libre Asignación",
+      availableSeats: availableTickets.length,
+      price: zone.price,
+      selectedCount: 0,
+      tickets: availableTickets
+    };
+  }
+
+  const sortedTickets = tickets.sort((a, b) => {
+    const numA = parseInt(a.seat_id.match(/\d+/)[0], 10);
+    const numB = parseInt(b.seat_id.match(/\d+/)[0], 10);
+    return numA - numB;
+  });
+
+  return {
+    type: "Asignado",
+    seats: sortedTickets.map((ticket) => ({
+      id: ticket.seat_id,
+      ticket_id: ticket.ticket_id,
+      price: zone.price,
+      status: ticket.status === true ? 'available' : 'unavailable',
+      status_offline: ticket.status_offline,
+      location: zone.name,
+      name: zone.name,
+      metadata: ''
+    }))
+  };
+};
+```
+
+### Assigned Seat Selection
+
+```javascript
+const renderSeatSection = (sectionKey, section) => (
+  <AccordionItem value={sectionKey} key={sectionKey}>
+    <AccordionTrigger className="text-lg font-semibold px-4">
+      {sectionKey}
+    </AccordionTrigger>
+    <AccordionContent className="px-4 pt-4">
+      {section?.type === "Asignado" ? (
+        <div className="grid grid-cols-10 justify-center gap-2 mb-4">
+          {section?.seats.map((seat) => (
+            <Button
+              key={seat.id}
+              variant={selectedSeats.some(s => s.id === seat.id) ? "default" : "outline"}
+              size="sm"
+              onClick={() => toggleSeatSelection(seat)}
+              className={`w-10 h-10 ${
+                seat.status === 'unavailable'
+                  ? "bg-gray-300 text-gray-500 cursor-not-allowed"
+                  : selectedSeats.some(s => s.id === seat.id)
+                    ? "bg-primary text-white"
+                    : "hover:bg-primary/10"
+              }`}
+              disabled={seat.status === 'unavailable'}
+            >
+              {seat.id}
+            </Button>
+          ))}
+        </div>
+      ) : (
+        // Free assignment UI
+      )}
+    </AccordionContent>
+  </AccordionItem>
+);
+```
+
+### Free Assignment Selection
+
+```javascript
+<div className="space-y-4">
+  <div className="flex items-center justify-between">
+    <span>Cantidad de asientos:</span>
+    <Input
+      type="number"
+      min="1"
+      max={section?.availableSeats}
+      value={section?.selectedCount || 0}
+      onChange={(e) => handleFreeAssignmentSelection(sectionKey, parseInt(e.target.value))}
+      className="w-20"
+    />
+  </div>
+  <div className="text-sm text-gray-500">
+    Asientos disponibles: {section?.availableSeats}
+  </div>
+  <Button
+    onClick={() => addFreeAssignmentSeatsToCart(sectionKey)}
+    disabled={!section?.selectedCount}
+    className="w-full mt-6 bg-primary hover:bg-primary/90 text-white"
+  >
+    Agregar al carrito
+  </Button>
+</div>
+```
+
+### Seat Lock System
+
+Seats are temporarily locked when added to cart:
+
+```javascript
+const handleConfirmSeats = async () => {
+  setSubmitConfirmSeat(true);
+  
+  const ticketsToLock = selectedSeats.map((seat) => seat.ticket_id);
+  
+  try {
+    const response = await tickets_lock_virtual({
+      event_id: params.idEvent,
+      tickets: ticketsToLock
+    });
+    
+    if (response?.data?.success) {
+      setCheckoutStep("payment");
+      setUnlockTicket(true);
+    }
+  } catch (error) {
+    console.error("Error locking tickets:", error);
+  }
+  
+  setSubmitConfirmSeat(false);
+};
+```
+
+## Countdown Timer
+
+A 10-minute timer gives users time to complete purchase:
+
+```javascript
+const [timeLeft, setTimeLeft] = useState(600); // 10 minutes
+const [showTimeoutModal, setShowTimeoutModal] = useState(false);
+
+useEffect(() => {
+  if (checkoutStep === "payment" && timeLeft > 0) {
+    const timer = setTimeout(() => setTimeLeft(timeLeft - 1), 1000)
+    return () => clearTimeout(timer)
+  } else if (checkoutStep === "payment" && timeLeft === 0) {
+    setShowTimeoutModal(true)
+  }
+}, [checkoutStep, timeLeft])
+
+const formatTime = (seconds) => {
+  const minutes = Math.floor(seconds / 60)
+  const remainingSeconds = seconds % 60
+  return `${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`
+};
+
+// Display:
+<div className="text-center">
+  <Clock className="h-5 w-5 inline mr-2" />
+  Tiempo restante: <span className="font-bold">{formatTime(timeLeft)}</span>
+</div>
+```
+
+## Buyer Information Form
+
+### Auto-Population from User Data
+
+```javascript
+useEffect(() => {
+  if (user) {
+    setBuyerInfo({
+      name: user.name || "",
+      email: user.email || "",
+      phone: user.phone || "",
+      id: user.id || "",
+      id_type: user.id_type || "",
+    })
+  }
+}, [user])
+```
+
+### Gift Purchase Option
+
+```javascript
+<div className="flex items-center space-x-2 mb-4">
+  <Switch
+    id="gift-purchase"
+    checked={isGiftPurchase}
+    onCheckedChange={setIsGiftPurchase}
+  />
+  <Label htmlFor="gift-purchase" className="flex items-center cursor-pointer">
+    <Gift className="h-4 w-4 mr-2 text-primary" />
+    Esta es una compra de regalo
+  </Label>
+</div>
+
+{isGiftPurchase && (
+  <div className="space-y-4 p-4 bg-primary/5 border border-primary/20 rounded-lg">
+    <h4 className="font-semibold text-primary">Información del Destinatario</h4>
+    {/* Recipient form fields */}
+  </div>
+)}
+```
+
+## Payment Methods
+
+### Available Options
+
+<CardGroup cols={2}>
+  <Card title="Pago Móvil" icon="smartphone">
+    Mobile payment (Mercantil API or BCV verification)
+  </Card>
+  <Card title="Zelle" icon="dollar-sign">
+    International transfer
+  </Card>
+  <Card title="Tarjeta de Crédito" icon="credit-card">
+    Credit card (Mercantil API)
+  </Card>
+  <Card title="Tarjeta de Débito" icon="credit-card">
+    Debit card with 2FA
+  </Card>
+  <Card title="Tarjeta Internacional" icon="globe">
+    Stripe integration
+  </Card>
+  <Card title="Transferencia Bancaria" icon="bank">
+    Bank transfer
+  </Card>
+</CardGroup>
+
+### Payment Method Configuration
+
+Payment methods are fetched from Firestore:
+
+```javascript
+const paymentMethods = await getDocs(collection(db, `/offices/${portal.office_id}/payment_methods`));
+
+if (!paymentMethods.empty) {
+  let PaymentMethodsFinal = [];
+  let PaymentMethodsFinal2 = [];
+  paymentMethods.docs.forEach((paymentMethod) => {
+    const data = paymentMethod.data();
+    PaymentMethodsFinal.push({ label: data.name, value: data.method });
+    PaymentMethodsFinal2.push(data);
+  })
+  
+  setPaymentMethods(PaymentMethodsFinal);
+  setPaymentMethodsData(PaymentMethodsFinal2);
+}
+```
+
+### Pago Móvil (Mercantil)
+
+```javascript
+case "Pago Móvil":
+  const selectedPagoMovilMethod = paymentMethodsData.find(p => p.method === paymentMethod);
+  const bankName = selectedPagoMovilMethod?.data?.bank || "";
+  const isMercantil = bankName === "Mercantil";
+  
+  return (
+    <div className="space-y-4 mt-4">
+      <h3 className="font-semibold text-lg">Detalles de Pago Móvil</h3>
+      
+      <div className="grid gap-4">
+        <div>
+          <Label htmlFor="origin_bank">Banco de Origen</Label>
+          <select id="origin_bank" value={pagoMovilInfo.origin_bank} 
+                  onChange={handlePagoMovilInfoChange}>
+            <option value="0102">Banco de Venezuela</option>
+            <option value="0134">Banesco</option>
+            <option value="0105">Mercantil</option>
+            {/* More banks */}
+          </select>
+        </div>
+        
+        <div>
+          <Label htmlFor="phone">Teléfono del Pagador</Label>
+          <MuiTelInput
+            id="phone"
+            value={pagoMovilInfo.phone}
+            onChange={(newValue) => setPagoMovilInfo(prev => ({ ...prev, phone: newValue }))}
+            preferredCountries={['VE', 'US']}
+            defaultCountry='VE'
+          />
+        </div>
+        
+        {isMercantil && (
+          <div>
+            <Label htmlFor="twofactor_auth">Clave de Pago</Label>
+            <Input
+              id="twofactor_auth"
+              placeholder="Ingrese la clave de pago recibida"
+              value={pagoMovilInfo.twofactor_auth}
+              onChange={handlePagoMovilInfoChange}
+            />
+          </div>
+        )}
+      </div>
+    </div>
+  )
+```
+
+### Stripe Integration
+
+```javascript
+const StripeCardInput = ({ onCardElementReady }) => {
+  const stripe = useStripe();
+  const elements = useElements();
+
+  useEffect(() => {
+    if (stripe && elements && onCardElementReady) {
+      const cardElement = elements.getElement(CardElement);
+      onCardElementReady(cardElement);
+    }
+  }, [stripe, elements, onCardElementReady]);
+
+  return (
+    <div className="grid gap-2">
+      <Label>Información de la Tarjeta</Label>
+      <div className="p-4 border rounded-md focus-within:ring-2 focus-within:ring-primary">
+        <CardElement
+          options={{
+            style: {
+              base: {
+                fontSize: '16px',
+                color: 'hsl(var(--foreground))',
+                '::placeholder': {
+                  color: 'hsl(var(--muted-foreground))',
+                },
+              },
+              invalid: {
+                color: 'hsl(var(--destructive))',
+              },
+            },
+          }}
+        />
+      </div>
+      <p className="text-xs text-gray-500">
+        💳 Tu información de tarjeta es manejada de forma segura por Stripe
+      </p>
+    </div>
+  );
+};
+
+// Wrapper component
+const StripeElementsWrapper = ({ stripePromise, children }) => {
+  if (!stripePromise) {
+    return <div>⏳ Inicializando Stripe...</div>;
+  }
+  return <Elements stripe={stripePromise}>{children}</Elements>;
+};
+```
+
+## Price Calculation
+
+### Tax and Fee Computation
+
+```javascript
+const truncateDecimals = (number, digits) => {
+  const multiplier = Math.pow(10, digits);
+  return Math.trunc(number * multiplier) / multiplier;
+};
+
+const roundDecimals = (number, digits) => {
+  const multiplier = Math.pow(10, digits);
+  return Math.round(number * multiplier) / multiplier;
+};
+
+// Calculate totals
+const subtotal = selectedSeats.reduce((acc, seat) => acc + seat.price, 0);
+const ivaAmount = roundDecimals(subtotal * 0.16, 2);
+const igtfAmount = paymentMethod === 'Zelle' ? truncateDecimals((subtotal + ivaAmount) * 0.03, 2) : 0;
+const totalAmount = subtotal + ivaAmount + igtfAmount;
+```
+
+### Order Summary Display
+
+```javascript
+<div className="bg-gray-50 p-4 rounded-lg space-y-3">
+  <div className="flex justify-between">
+    <span>Entradas ({selectedSeats.length})</span>
+    <span>${subtotal.toFixed(2)}</span>
+  </div>
+  <div className="flex justify-between">
+    <span>IVA (16%)</span>
+    <span>${ivaAmount.toFixed(2)}</span>
+  </div>
+  {igtfAmount > 0 && (
+    <div className="flex justify-between">
+      <span>IGTF (3%)</span>
+      <span>${igtfAmount.toFixed(2)}</span>
+    </div>
+  )}
+  <Separator />
+  <div className="flex justify-between font-semibold">
+    <span>Total (BS)</span>
+    <span>BS {truncateDecimals(totalAmount * usdCentralBank, 2).toFixed(2)}</span>
+  </div>
+  <div className="flex justify-between font-semibold text-lg text-primary">
+    <span>Total</span>
+    <span>${totalAmount.toFixed(2)}</span>
+  </div>
+</div>
+```
+
+## Order Creation
+
+When payment is confirmed:
+
+```javascript
+const handleCompletePurchase = async () => {
+  setSubmit(true);
+  
+  try {
+    const orderData = {
+      event_id: params.idEvent,
+      tickets: selectedSeats.map(seat => ({
+        ticket_id: seat.ticket_id,
+        seat_id: seat.id,
+        zone: seat.location,
+        amount: seat.price
+      })),
+      purchaser_info: buyerInfo,
+      recipient_info: isGiftPurchase ? recipientInfo : null,
+      is_gift: isGiftPurchase,
+      amount: totalAmount,
+      exchange_rate: usdCentralBank,
+      transactions: [{
+        payment_name: paymentMethod,
+        payment_data: paymentInfo,
+        amount_currency: paymentMethod === 'Zelle' ? 'USD' : 'VEF'
+      }]
+    };
+    
+    const response = await order_created(orderData);
+    
+    if (response?.data?.success) {
+      navigate(`/purchaseSuccess/${params.idEvent}/${response.data.order_id}`);
+    }
+  } catch (error) {
+    console.error("Order creation error:", error);
+    toast.error("Error al procesar la orden. Por favor, intenta nuevamente.");
+  }
+  
+  setSubmit(false);
+};
+```
+
+---
+
+## Purchase Success View
+
+**Route:** `/purchaseSuccess/:idEvent/:idOrder`  
+**Guard:** `<AuthGuard>`
+
+### Purpose
+
+Displays order confirmation with all purchase details, ticket information, and payment receipt.
+
+### Data Loading
+
+```javascript
+const getOrderData = async () => {
+  const querySnapshot = await getDoc(doc(db, '/orders', `${params.idOrder}`));
+  setPurchaseDetails(querySnapshot.data())
+};
+```
+
+### Order Details Structure
+
+```javascript
+const isGiftPurchase = purchaseDetails?.is_gift || false;
+
+let buyerInfo = {};
+let recipientInfo = null;
+
+if (purchaseDetails?.purchaser_info) {
+  buyerInfo = purchaseDetails.purchaser_info;
+  if (isGiftPurchase) {
+    recipientInfo = purchaseDetails.recipient_info || {};
+  }
+}
+```
+
+### Gift Purchase Indicator
+
+```javascript
+{isGiftPurchase && (
+  <div className="p-4 mb-6 border border-primary/20 rounded-md bg-primary/5 text-center">
+    <div className="flex items-center justify-center mb-2">
+      <Gift className="h-5 w-5 text-primary mr-2" />
+      <span className="font-semibold text-primary">Compra de Regalo</span>
+    </div>
+    <p className="text-primary/80">
+      Has comprado estos tickets como regalo para {recipientInfo?.name || 'el destinatario'}.
+    </p>
+  </div>
+)}
+```
+
+### Event Information Display
+
+```javascript
+<div className="flex items-center space-x-4 bg-gray-50 p-4 rounded-lg">
+  <img
+    src={eventDetails.image}
+    alt={eventDetails.title}
+    className="w-20 h-20 rounded-md object-cover shadow"
+  />
+  <div>
+    <h4 className="font-semibold text-lg">{eventDetails.title}</h4>
+    <div className="text-sm text-gray-500 mt-2">
+      <div className="flex items-center mb-1">
+        <Calendar className="h-4 w-4 mr-1" />
+        {eventDetails.date}
+      </div>
+      <div className="flex items-center mb-1">
+        <Clock className="h-4 w-4 mr-1" />
+        {eventDetails.time}
+      </div>
+      <div className="flex items-center">
+        <MapPin className="h-4 w-4 mr-1" />
+        {eventDetails.venue}
+      </div>
+    </div>
+  </div>
+</div>
+```
+
+### Ticket Grid
+
+```javascript
+<div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+  {purchaseDetails?.tickets?.map((seat) => (
+    <div key={seat.id} className="bg-primary/10 rounded-md p-3 text-center shadow-sm">
+      <p className="font-semibold text-primary">{seat.id}</p>
+      <p className="text-xs text-gray-500 mt-1">{seat.zone}</p>
+    </div>
+  ))}
+</div>
+```
+
+### Payment Details Rendering
+
+Dynamically renders payment information based on method:
+
+```javascript
+const renderPaymentDetails = (data) => {
+  const renderValue = (key, value) => {
+    if (value === null || value === undefined) return "-";
+    
+    // Security: Hide CVV
+    if (key === 'cvv') return '***';
+    
+    // Mask card number
+    if (key === 'card_number' && typeof value === 'string') {
+      if (value.length > 4) {
+        return '•••• •••• •••• ' + value.slice(-4);
+      }
+      return value;
+    }
+    
+    // Format transaction status
+    if (key === 'transaction_status') {
+      if (value === '1000') {
+        return <span className="text-green-600 font-medium">Aprobada</span>;
+      }
+      return value;
+    }
+    
+    // Format amounts
+    if (key === 'transaction_amount') {
+      return <span className="font-semibold text-green-600">Bs {parseFloat(value).toFixed(2)}</span>;
+    }
+    
+    return value;
+  };
+  
+  // Categorize fields into sections
+  const payerFields = ['pagador_telefono', 'pagador_identificacion', 'origin_bank'];
+  const recipientFields = ['destination_phone', 'destination_id', 'bank_name'];
+  
+  // Render sections
+  return (
+    <div>
+      {/* Payer section */}
+      {/* Recipient section */}
+      {/* General fields */}
+    </div>
+  );
+};
+```
+
+### Order Summary
+
+```javascript
+<div className="bg-gray-50 p-4 rounded-lg space-y-3">
+  <div className="flex justify-between">
+    <span>Entradas ({purchaseDetails?.tickets?.length || 0})</span>
+    <span>${subtotalFinal.toFixed(2)}</span>
+  </div>
+  <div className="flex justify-between">
+    <span>IVA ({configData?.iva_tax || 16}%)</span>
+    <span>${ivaFinal.toFixed(2)}</span>
+  </div>
+  {igtfFinal > 0 && (
+    <div className="flex justify-between">
+      <span>IGTF ({configData?.igtf_tax || 3}%)</span>
+      <span>${igtfFinal.toFixed(2)}</span>
+    </div>
+  )}
+  <Separator />
+  <div className="flex justify-between font-semibold">
+    <span>Total (BS)</span>
+    <span>BS {truncateDecimals(totalAmount * purchaseDetails?.exchange_rate, 2)?.toFixed(2) || '0.00'}</span>
+  </div>
+  <div className="flex justify-between font-semibold text-lg text-primary">
+    <span>Total</span>
+    <span>${totalAmount?.toFixed(2) || '0.00'}</span>
+  </div>
+</div>
+```
+
+## Related Views
+
+<CardGroup cols={2}>
+  <Card title="User Profile" icon="user" href="/views/user-profile">
+    View purchased tickets and order history
+  </Card>
+  <Card title="Event Detail" icon="ticket" href="/views/events">
+    Return to event information
+  </Card>
+</CardGroup>

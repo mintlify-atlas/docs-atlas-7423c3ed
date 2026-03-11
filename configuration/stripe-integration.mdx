@@ -1,0 +1,384 @@
+---
+title: 'Stripe Integration'
+description: 'Configure Stripe payment processing for TradeMaster Transactions Portales'
+icon: 'credit-card'
+---
+
+## Overview
+
+TradeMaster Transactions Portales integrates with Stripe for secure payment processing. This guide covers the complete setup process for Stripe integration.
+
+## Prerequisites
+
+- Active Stripe account ([Sign up here](https://dashboard.stripe.com/register))
+- Firebase project with Cloud Functions deployed
+- Environment variables configured
+
+## Stripe Account Setup
+
+<Steps>
+  <Step title="Create Stripe Account">
+    1. Go to [Stripe Dashboard](https://dashboard.stripe.com/)
+    2. Sign up or log in to your account
+    3. Complete your business profile
+    4. Activate your account for live payments
+  </Step>
+
+  <Step title="Get API Keys">
+    1. Navigate to **Developers > API keys** in the Stripe Dashboard
+    2. Copy your **Publishable key** (starts with `pk_`)
+    3. Copy your **Secret key** (starts with `sk_`)
+    
+    <Warning>
+      Keep your Secret key secure! Never commit it to version control or expose it in client-side code.
+    </Warning>
+  </Step>
+
+  <Step title="Configure Test Mode">
+    For development, use test mode keys:
+    - Test Publishable key: `pk_test_...`
+    - Test Secret key: `sk_test_...`
+    
+    Test cards like `4242 4242 4242 4242` will work in test mode.
+  </Step>
+</Steps>
+
+## Frontend Configuration
+
+The Stripe client is configured in `src/guards/stripe/stripeConfig.js`:
+
+```javascript src/guards/stripe/stripeConfig.js
+import { loadStripe } from '@stripe/stripe-js';
+
+// Load Stripe publishable key from environment variable
+const STRIPE_PUBLIC_KEY = import.meta.env.VITE_STRIPE_PUBLIC_KEY || 'pk_test_...';
+
+// Initialize Stripe promise
+let stripePromise = null;
+
+export const initializeStripe = async () => {
+  if (!STRIPE_PUBLIC_KEY || STRIPE_PUBLIC_KEY === 'pk_test_...') {
+    console.error('❌ STRIPE_PUBLIC_KEY not configured');
+    throw new Error('Stripe public key is not configured');
+  }
+
+  if (!stripePromise) {
+    stripePromise = loadStripe(STRIPE_PUBLIC_KEY);
+  }
+  return stripePromise;
+};
+
+export const getStripePromise = () => stripePromise;
+
+export default stripePromise;
+```
+
+### Key Configuration Features
+
+<AccordionGroup>
+  <Accordion title="Environment Variable Loading">
+    The configuration reads the publishable key from `VITE_STRIPE_PUBLIC_KEY` environment variable, allowing you to switch between test and production keys easily.
+  </Accordion>
+
+  <Accordion title="Lazy Initialization">
+    Stripe is initialized only once when first needed, improving initial page load performance.
+  </Accordion>
+
+  <Accordion title="Error Handling">
+    The configuration validates that a proper API key is set and throws descriptive errors if misconfigured.
+  </Accordion>
+</AccordionGroup>
+
+## Environment Variables
+
+Add the following to your `.env.local` file:
+
+<CodeGroup>
+
+```bash .env.local (Development)
+VITE_STRIPE_PUBLIC_KEY=pk_test_51234567890abcdefghijklmnopqrstuvwxyz
+```
+
+```bash .env.production (Production)
+VITE_STRIPE_PUBLIC_KEY=pk_live_51234567890abcdefghijklmnopqrstuvwxyz
+```
+
+</CodeGroup>
+
+<Warning>
+  The publishable key (`pk_`) is safe to expose in client-side code. However, NEVER expose your secret key (`sk_`) in the frontend.
+</Warning>
+
+## Backend Configuration (Cloud Functions)
+
+The backend payment processing is handled through Firebase Cloud Functions:
+
+### Payment Intent Creation
+
+```javascript
+import { stripe_create_payment_intent } from './guards/firebase/firebase';
+
+// Create payment intent
+const createPayment = async (amount, currency = 'usd') => {
+  try {
+    const result = await stripe_create_payment_intent({
+      amount: amount * 100, // Convert to cents
+      currency: currency,
+      metadata: {
+        orderId: orderId,
+        eventId: eventId
+      }
+    });
+    
+    return result.data.clientSecret;
+  } catch (error) {
+    console.error('Payment intent creation failed:', error);
+    throw error;
+  }
+};
+```
+
+### Payment Confirmation
+
+```javascript
+import { stripe_confirm_payment } from './guards/firebase/firebase';
+
+// Confirm payment
+const confirmPayment = async (paymentIntentId) => {
+  try {
+    const result = await stripe_confirm_payment({
+      paymentIntentId: paymentIntentId
+    });
+    
+    return result.data;
+  } catch (error) {
+    console.error('Payment confirmation failed:', error);
+    throw error;
+  }
+};
+```
+
+### Payment Intent Retrieval
+
+```javascript
+import { stripe_get_payment_intent } from './guards/firebase/firebase';
+
+// Get payment intent status
+const getPaymentStatus = async (paymentIntentId) => {
+  try {
+    const result = await stripe_get_payment_intent({
+      paymentIntentId: paymentIntentId
+    });
+    
+    return result.data.status;
+  } catch (error) {
+    console.error('Failed to get payment status:', error);
+    throw error;
+  }
+};
+```
+
+## Cloud Functions Setup
+
+Your Firebase Cloud Functions need to include the Stripe secret key:
+
+<Steps>
+  <Step title="Install Stripe SDK">
+    In your Cloud Functions directory:
+    ```bash
+    npm install stripe
+    ```
+  </Step>
+
+  <Step title="Configure Secret Key">
+    Use Firebase environment configuration:
+    ```bash
+    firebase functions:config:set stripe.secret_key="sk_test_YOUR_SECRET_KEY"
+    ```
+  </Step>
+
+  <Step title="Initialize Stripe in Functions">
+    ```javascript functions/index.js
+    const functions = require('firebase-functions');
+    const stripe = require('stripe')(functions.config().stripe.secret_key);
+    ```
+  </Step>
+</Steps>
+
+## Payment Flow
+
+The typical payment flow in TradeMaster Transactions:
+
+<Steps>
+  <Step title="Customer Initiates Purchase">
+    User selects tickets and proceeds to checkout.
+  </Step>
+
+  <Step title="Create Payment Intent">
+    Frontend calls `stripe_create_payment_intent` Cloud Function:
+    - Amount is calculated based on ticket selection
+    - Payment Intent is created on Stripe servers
+    - Client secret is returned to frontend
+  </Step>
+
+  <Step title="Collect Payment Details">
+    Frontend displays Stripe Elements for secure card input:
+    ```jsx
+    import { CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
+    
+    const CheckoutForm = ({ clientSecret }) => {
+      const stripe = useStripe();
+      const elements = useElements();
+      
+      const handleSubmit = async (event) => {
+        event.preventDefault();
+        
+        const result = await stripe.confirmCardPayment(clientSecret, {
+          payment_method: {
+            card: elements.getElement(CardElement),
+          }
+        });
+        
+        if (result.error) {
+          console.error(result.error.message);
+        } else {
+          // Payment succeeded
+          console.log('Payment successful:', result.paymentIntent);
+        }
+      };
+    };
+    ```
+  </Step>
+
+  <Step title="Confirm Payment">
+    After payment confirmation:
+    - Order is created in Firestore
+    - Tickets are allocated to customer
+    - Confirmation email is sent
+  </Step>
+</Steps>
+
+## Webhook Configuration
+
+<Warning>
+  Webhooks are essential for handling asynchronous payment events like successful charges, refunds, and disputes.
+</Warning>
+
+To set up webhooks:
+
+<Steps>
+  <Step title="Create Webhook Endpoint">
+    In Firebase Cloud Functions, create a webhook handler:
+    ```javascript
+    exports.stripeWebhook = functions.https.onRequest(async (req, res) => {
+      const sig = req.headers['stripe-signature'];
+      const webhookSecret = functions.config().stripe.webhook_secret;
+      
+      let event;
+      try {
+        event = stripe.webhooks.constructEvent(req.rawBody, sig, webhookSecret);
+      } catch (err) {
+        return res.status(400).send(`Webhook Error: ${err.message}`);
+      }
+      
+      // Handle the event
+      switch (event.type) {
+        case 'payment_intent.succeeded':
+          // Handle successful payment
+          break;
+        case 'payment_intent.payment_failed':
+          // Handle failed payment
+          break;
+      }
+      
+      res.json({ received: true });
+    });
+    ```
+  </Step>
+
+  <Step title="Configure in Stripe Dashboard">
+    1. Go to **Developers > Webhooks**
+    2. Click "Add endpoint"
+    3. Enter your Cloud Function URL: `https://us-central1-YOUR_PROJECT.cloudfunctions.net/stripeWebhook`
+    4. Select events to listen for
+    5. Copy the webhook signing secret
+  </Step>
+
+  <Step title="Store Webhook Secret">
+    ```bash
+    firebase functions:config:set stripe.webhook_secret="whsec_..."
+    ```
+  </Step>
+</Steps>
+
+## Testing Payments
+
+### Test Card Numbers
+
+Use these test cards in test mode:
+
+| Card Number | Description |
+|------------|-------------|
+| `4242 4242 4242 4242` | Successful payment |
+| `4000 0000 0000 9995` | Declined payment |
+| `4000 0025 0000 3155` | Requires authentication (3D Secure) |
+| `4000 0000 0000 0069` | Expired card |
+
+<Warning>
+  Use any future expiration date, any 3-digit CVC, and any postal code.
+</Warning>
+
+### Test Mode Best Practices
+
+1. Always test with Stripe test keys (`pk_test_` and `sk_test_`)
+2. Test various card scenarios (success, decline, authentication)
+3. Verify webhook events are received correctly
+4. Test refund and dispute flows
+
+## Security Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Use HTTPS" icon="lock">
+    Always serve your application over HTTPS in production
+  </Card>
+  <Card title="Validate Webhooks" icon="shield-check">
+    Always verify webhook signatures to prevent fraud
+  </Card>
+  <Card title="PCI Compliance" icon="certificate">
+    Use Stripe Elements to avoid handling card data directly
+  </Card>
+  <Card title="Secure Keys" icon="key">
+    Store secret keys in environment variables, never in code
+  </Card>
+</CardGroup>
+
+## Troubleshooting
+
+### "Stripe public key not configured" Error
+
+**Solution**: Ensure `VITE_STRIPE_PUBLIC_KEY` is set in your `.env.local` file and restart your dev server.
+
+### Payment Intent Creation Fails
+
+**Solution**: Check that your Cloud Function has the correct Stripe secret key configured:
+```bash
+firebase functions:config:get
+```
+
+### Webhook Events Not Received
+
+**Solution**: 
+1. Verify webhook URL is correct in Stripe Dashboard
+2. Check Cloud Function logs for errors
+3. Ensure webhook signature verification is correct
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Environment Variables" icon="gear" href="/configuration/environment-variables">
+    Complete environment variable reference
+  </Card>
+  <Card title="Payment Processing" icon="money-bill" href="/features/payment-processing">
+    Learn about payment processing features
+  </Card>
+</CardGroup>

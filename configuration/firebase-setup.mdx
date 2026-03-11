@@ -1,0 +1,272 @@
+---
+title: 'Firebase Configuration'
+description: 'Complete guide to setting up Firebase for TradeMaster Transactions Portales'
+icon: 'fire'
+---
+
+## Overview
+
+TradeMaster Transactions Portales uses Firebase for authentication, database, storage, and Cloud Functions. This guide walks you through the complete Firebase setup process.
+
+## Firebase Project Setup
+
+<Steps>
+  <Step title="Create Firebase Project">
+    1. Go to the [Firebase Console](https://console.firebase.google.com/)
+    2. Click "Add project" or use an existing project
+    3. Enter project name: `trademastertransaction-project`
+    4. Follow the setup wizard to complete project creation
+  </Step>
+
+  <Step title="Register Web App">
+    1. In the Firebase Console, click on the web icon (`</>`)
+    2. Register your app with a nickname (e.g., "TradeMaster Portales")
+    3. Firebase will generate configuration credentials
+    4. Copy the configuration object for the next step
+  </Step>
+
+  <Step title="Configure Firebase in Your App">
+    The Firebase configuration is located in `src/guards/firebase/firebase.js`:
+
+    ```javascript src/guards/firebase/firebase.js
+    import { initializeApp } from "firebase/app";
+    import { getAuth } from "firebase/auth";
+    import { getStorage } from "firebase/storage";
+    import { initializeFirestore } from "firebase/firestore";
+    import { getFunctions } from "firebase/functions";
+
+    const firebaseConfig = {
+      apiKey: "YOUR_API_KEY",
+      authDomain: "your-project.firebaseapp.com",
+      projectId: "your-project-id",
+      storageBucket: "your-project.appspot.com",
+      messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
+      appId: "YOUR_APP_ID"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    ```
+
+    <Warning>
+      Replace the configuration values with your actual Firebase project credentials from the Firebase Console.
+    </Warning>
+  </Step>
+</Steps>
+
+## Firebase Services Configuration
+
+### Authentication
+
+The app initializes Firebase Authentication for user management:
+
+```javascript
+import { getAuth } from "firebase/auth";
+
+const auth = getAuth(app);
+export { auth };
+```
+
+**Enable Authentication Methods:**
+1. In Firebase Console, go to Authentication > Sign-in method
+2. Enable Email/Password authentication
+3. Configure authorized domains for your portals
+
+### Firestore Database
+
+Firestore is configured with long polling for better connection stability:
+
+```javascript
+import { initializeFirestore } from "firebase/firestore";
+
+const db = initializeFirestore(app, {
+  experimentalForceLongPolling: true,
+});
+export { db };
+```
+
+**Database Structure:**
+- `events` - Event listings and details
+- `tickets` - Ticket inventory and sales
+- `orders` - Transaction records
+- `clients` - Customer information
+- `portals` - Portal configurations
+
+<Warning>
+  The `experimentalForceLongPolling` option is used to ensure reliable connections in environments with restrictive network configurations.
+</Warning>
+
+### Cloud Storage
+
+Firebase Storage is used for file uploads (images, documents, etc.):
+
+```javascript
+import { getStorage } from "firebase/storage";
+
+const storage = getStorage(app);
+export { storage };
+```
+
+**Storage Usage:**
+- Event images and banners
+- Ticket attachments
+- User profile pictures
+- Receipt documents
+
+### Cloud Functions
+
+The app uses multiple Cloud Functions for backend operations:
+
+```javascript
+import { getFunctions, httpsCallable } from "firebase/functions";
+
+const functions = getFunctions(app);
+
+// Event Management
+const list_events_clients = httpsCallable(functions, "list_events_clients");
+
+// Ticket Operations
+const tickets_list_event_sales_virtual = httpsCallable(functions, "tickets_list_event_sales_virtual");
+const tickets_lock_virtual = httpsCallable(functions, "tickets_lock_virtual");
+const tickets_unlock_param_virtual = httpsCallable(functions, "tickets_unlock_param_virtual");
+
+// Order Processing
+const order_created = httpsCallable(functions, "order_created");
+
+// Communication
+const send_email = httpsCallable(functions, "send_email");
+
+// Payment Processing
+const stripe_create_payment_intent = httpsCallable(functions, "stripe_create_payment_intent");
+const stripe_confirm_payment = httpsCallable(functions, "stripe_confirm_payment");
+const stripe_get_payment_intent = httpsCallable(functions, "stripe_get_payment_intent");
+
+// Mercantil Payment Gateway
+const api_mercantil_tdc_pay = httpsCallable(functions, "api_mercantil_tdc_pay");
+const api_mercantil_auth = httpsCallable(functions, "api_mercantil_auth");
+const api_mercantil_tdd_pay = httpsCallable(functions, "api_mercantil_tdd_pay");
+const api_mercantil_c2p_auth = httpsCallable(functions, "api_mercantil_c2p_auth");
+const api_mercantil_c2p_pay = httpsCallable(functions, "api_mercantil_c2p_pay");
+const mobile_payment_bcv = httpsCallable(functions, "mobile_payment_bcv");
+```
+
+## Firebase Hosting Configuration
+
+The hosting configuration is defined in `firebase.json`:
+
+```json firebase.json
+{
+  "hosting": {
+    "site": "trademastertransaction-protales",
+    "public": "dist",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ],
+    "rewrites": [
+      {
+        "source": "**",
+        "destination": "/index.html"
+      }
+    ]
+  }
+}
+```
+
+**Configuration Details:**
+- **site**: The Firebase Hosting site identifier
+- **public**: The build output directory (Vite builds to `dist`)
+- **rewrites**: Routes all requests to `index.html` for client-side routing
+
+## Project Configuration
+
+The Firebase project settings are stored in `.firebaserc`:
+
+```json .firebaserc
+{
+  "projects": {
+    "default": "trademastertransaction-project"
+  },
+  "targets": {
+    "trademastertransaction-project": {
+      "hosting": {
+        "trademastertransaction-protales": [
+          "trademastertransaction-protales"
+        ]
+      }
+    }
+  }
+}
+```
+
+## Security Rules
+
+<Warning>
+  Always implement proper security rules for Firestore and Storage in production. The Firebase Console allows you to configure these under the "Rules" tab for each service.
+</Warning>
+
+**Recommended Security Practices:**
+
+1. **Firestore Rules**: Restrict read/write access based on authentication
+2. **Storage Rules**: Validate file types and sizes, restrict access to authenticated users
+3. **API Keys**: Restrict API key usage to specific domains in Firebase Console
+4. **Environment Variables**: Never commit Firebase config to public repositories
+
+## Deployment
+
+To deploy your app to Firebase Hosting:
+
+<Steps>
+  <Step title="Install Firebase CLI">
+    ```bash
+    npm install -g firebase-tools
+    ```
+  </Step>
+
+  <Step title="Login to Firebase">
+    ```bash
+    firebase login
+    ```
+  </Step>
+
+  <Step title="Build Your App">
+    ```bash
+    npm run build
+    ```
+  </Step>
+
+  <Step title="Deploy to Firebase">
+    ```bash
+    firebase deploy --only hosting
+    ```
+  </Step>
+</Steps>
+
+## Troubleshooting
+
+### Connection Issues
+
+If you experience connection problems, the app uses `experimentalForceLongPolling` which helps in restrictive network environments.
+
+### Function Timeouts
+
+Cloud Functions have a default timeout of 60 seconds. For longer operations, increase the timeout in your function configuration.
+
+### CORS Errors
+
+If calling Cloud Functions from the web app results in CORS errors, ensure your function includes proper CORS headers:
+
+```javascript
+response.set('Access-Control-Allow-Origin', '*');
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Stripe Integration" icon="stripe" href="/configuration/stripe-integration">
+    Configure payment processing with Stripe
+  </Card>
+  <Card title="Environment Variables" icon="gear" href="/configuration/environment-variables">
+    Set up all required environment variables
+  </Card>
+</CardGroup>

@@ -1,0 +1,572 @@
+---
+title: 'Payment Method APIs'
+description: 'Payment processing functions for Stripe, Mercantil Bank, and BCV'
+icon: 'credit-card'
+---
+
+## Overview
+
+TradeMaster Transactions supports multiple payment methods including international credit cards (Stripe), Venezuelan credit/debit cards (Mercantil), mobile payments (Pago Móvil), and BCV verification.
+
+## Stripe Payment Functions
+
+### stripe_create_payment_intent
+
+Creates a new Stripe PaymentIntent for processing international credit card payments.
+
+<ParamField path="amount" type="number" required>
+  Payment amount in USD (e.g., 50.00 for $50)
+</ParamField>
+
+<ParamField path="currency" type="string" required>
+  Currency code (typically "usd")
+</ParamField>
+
+<ParamField path="metadata" type="object">
+  Additional metadata to attach to the payment
+  
+  <ParamField path="event_id" type="string">
+    ID of the event being purchased
+  </ParamField>
+  
+  <ParamField path="event_name" type="string">
+    Name of the event
+  </ParamField>
+  
+  <ParamField path="user_id" type="string">
+    Firebase user ID
+  </ParamField>
+  
+  <ParamField path="user_email" type="string">
+    Customer email address
+  </ParamField>
+</ParamField>
+
+<ParamField path="description" type="string">
+  Human-readable description of the payment
+</ParamField>
+
+#### Request Example
+
+```javascript
+import { stripe_create_payment_intent } from '@/guards/firebase/firebase';
+
+const createIntentResponse = await stripe_create_payment_intent({
+  amount: 50.00,
+  currency: 'usd',
+  metadata: {
+    event_id: eventDetails.id,
+    event_name: eventDetails.title,
+    user_id: user?.uid || '',
+    user_email: 'customer@example.com'
+  },
+  description: `Compra de tickets para ${eventDetails.title}`
+});
+```
+
+#### Response
+
+<ResponseField name="success" type="boolean">
+  Whether the payment intent was created successfully
+</ResponseField>
+
+<ResponseField name="client_secret" type="string">
+  Client secret for confirming the payment on the frontend
+</ResponseField>
+
+<ResponseField name="payment_intent_id" type="string">
+  Unique identifier for the payment intent
+</ResponseField>
+
+<ResponseField name="error" type="string">
+  Error message if creation failed
+</ResponseField>
+
+```json
+{
+  "success": true,
+  "client_secret": "pi_xxx_secret_xxx",
+  "payment_intent_id": "pi_xxxxxxxxxxxxx"
+}
+```
+
+<Note>
+  After creating the payment intent, use Stripe.js on the frontend to confirm the payment with the `client_secret`.
+</Note>
+
+### stripe_confirm_payment
+
+Confirms a Stripe payment after card details have been collected.
+
+<ParamField path="payment_intent_id" type="string" required>
+  The payment intent ID to confirm
+</ParamField>
+
+### stripe_get_payment_intent
+
+Retrieves the current status of a payment intent.
+
+<ParamField path="payment_intent_id" type="string" required>
+  The payment intent ID to retrieve
+</ParamField>
+
+---
+
+## Mercantil Bank Functions
+
+### api_mercantil_auth
+
+Authenticates a Venezuelan debit card before processing payment. Required before calling `api_mercantil_tdd_pay`.
+
+<ParamField path="customer_id" type="string" required>
+  Customer identification: ID type + ID number (e.g., "V12345678")
+</ParamField>
+
+<ParamField path="card_number" type="string" required>
+  16-digit card number
+</ParamField>
+
+<ParamField path="ipaddress" type="string" required>
+  Customer's IP address
+</ParamField>
+
+<ParamField path="browser_agent" type="string">
+  Browser user agent string
+</ParamField>
+
+<ParamField path="manufacturer" type="string">
+  Device manufacturer information
+</ParamField>
+
+#### Request Example
+
+```javascript
+import { api_mercantil_auth } from '@/guards/firebase/firebase';
+
+const authResponse = await api_mercantil_auth({
+  customer_id: `V12345678`,
+  card_number: "4111111111111111",
+  ipaddress: "192.168.1.1",
+  browser_agent: null,
+  manufacturer: null
+});
+```
+
+#### Response
+
+<ResponseField name="authentication_info" type="object">
+  Authentication result information
+  
+  <ResponseField name="trx_status" type="string">
+    Transaction status: "approved" or "rejected"
+  </ResponseField>
+  
+  <ResponseField name="twofactor_auth" type="string">
+    Two-factor authentication token (required for payment)
+  </ResponseField>
+</ResponseField>
+
+```json
+{
+  "authentication_info": {
+    "trx_status": "approved",
+    "twofactor_auth": "abc123xyz"
+  }
+}
+```
+
+<Warning>
+  Store the `twofactor_auth` token from the authentication response. It's required when calling `api_mercantil_tdd_pay`.
+</Warning>
+
+### api_mercantil_tdc_pay
+
+Processes a credit card payment through Mercantil Bank.
+
+<ParamField path="amount" type="number" required>
+  Payment amount in Venezuelan Bolívares (VES)
+</ParamField>
+
+<ParamField path="invoice_number" type="string" required>
+  Unique invoice number for the transaction
+</ParamField>
+
+<ParamField path="customer_id" type="string" required>
+  Customer identification: ID type + ID number
+</ParamField>
+
+<ParamField path="card_number" type="string" required>
+  16-digit credit card number
+</ParamField>
+
+<ParamField path="cvv" type="string" required>
+  3 or 4-digit card verification value
+</ParamField>
+
+<ParamField path="expiration_date" type="string" required>
+  Card expiration date in MMYY format
+</ParamField>
+
+<ParamField path="ipaddress" type="string" required>
+  Customer's IP address
+</ParamField>
+
+<ParamField path="browser_agent" type="string">
+  Browser user agent string
+</ParamField>
+
+<ParamField path="manufacturer" type="string">
+  Device manufacturer information
+</ParamField>
+
+#### Request Example
+
+```javascript
+import { api_mercantil_tdc_pay } from '@/guards/firebase/firebase';
+
+const amount = (totalWithIva * usdCentralBank).toFixed(0);
+const invoice_number = "INV" + Date.now().toString().substring(5);
+
+const paymentResponse = await api_mercantil_tdc_pay({
+  amount: Number(amount),
+  invoice_number: invoice_number,
+  customer_id: `V12345678`,
+  card_number: "4111111111111111",
+  cvv: "123",
+  expiration_date: "1225",
+  ipaddress: "192.168.1.1",
+  browser_agent: null,
+  manufacturer: null
+});
+```
+
+#### Response
+
+<ResponseField name="transaction_response" type="object">
+  Transaction result information
+  
+  <ResponseField name="trx_status" type="string">
+    Transaction status: "approved" or "rejected"
+  </ResponseField>
+  
+  <ResponseField name="trx_internal_status" type="string">
+    Internal status message
+  </ResponseField>
+  
+  <ResponseField name="payment_reference" type="string">
+    Payment reference number
+  </ResponseField>
+  
+  <ResponseField name="invoice_number" type="string">
+    Invoice number for the transaction
+  </ResponseField>
+  
+  <ResponseField name="processing_date" type="string">
+    Date the payment was processed
+  </ResponseField>
+  
+  <ResponseField name="payment_method" type="string">
+    Payment method code ("tdc" for credit card)
+  </ResponseField>
+</ResponseField>
+
+```json
+{
+  "transaction_response": {
+    "trx_status": "approved",
+    "trx_internal_status": "Aprobada",
+    "payment_reference": "REF123456",
+    "invoice_number": "INV1234567890",
+    "processing_date": "2024-03-15 14:30:00",
+    "payment_method": "tdc"
+  }
+}
+```
+
+### api_mercantil_tdd_pay
+
+Processes a debit card payment through Mercantil Bank. Requires prior authentication via `api_mercantil_auth`.
+
+<ParamField path="amount" type="number" required>
+  Payment amount in Venezuelan Bolívares (VES)
+</ParamField>
+
+<ParamField path="invoice_number" type="string" required>
+  Unique invoice number for the transaction
+</ParamField>
+
+<ParamField path="customer_id" type="string" required>
+  Customer identification: ID type + ID number
+</ParamField>
+
+<ParamField path="card_number" type="string" required>
+  16-digit debit card number
+</ParamField>
+
+<ParamField path="cvv" type="string" required>
+  3 or 4-digit card verification value
+</ParamField>
+
+<ParamField path="account_type" type="string" required>
+  Account type: "ahorros" (savings) or "corriente" (checking)
+</ParamField>
+
+<ParamField path="expiration_date" type="string" required>
+  Card expiration date in MMYY format
+</ParamField>
+
+<ParamField path="twofactor_auth" type="string" required>
+  Two-factor authentication token from `api_mercantil_auth`
+</ParamField>
+
+<ParamField path="ipaddress" type="string" required>
+  Customer's IP address
+</ParamField>
+
+<ParamField path="browser_agent" type="string">
+  Browser user agent string
+</ParamField>
+
+<ParamField path="manufacturer" type="string">
+  Device manufacturer information
+</ParamField>
+
+#### Request Example
+
+```javascript
+import { api_mercantil_tdd_pay } from '@/guards/firebase/firebase';
+
+const debitPaymentResponse = await api_mercantil_tdd_pay({
+  amount: 5000,
+  invoice_number: "INV1234567890",
+  customer_id: `V12345678`,
+  card_number: "4111111111111111",
+  cvv: "123",
+  account_type: "ahorros",
+  expiration_date: "1225",
+  twofactor_auth: "abc123xyz", // From api_mercantil_auth
+  ipaddress: "192.168.1.1",
+  browser_agent: null,
+  manufacturer: null
+});
+```
+
+#### Response
+
+Same structure as `api_mercantil_tdc_pay` response, with `payment_method` set to "tdd".
+
+<Note>
+  Debit card payments require two steps: First authenticate with `api_mercantil_auth`, then process payment with `api_mercantil_tdd_pay` using the `twofactor_auth` token.
+</Note>
+
+### api_mercantil_c2p_pay
+
+Processes a C2P (Client-to-Person) Pago Móvil payment through Mercantil Bank.
+
+<ParamField path="amount" type="number" required>
+  Payment amount in Venezuelan Bolívares (VES)
+</ParamField>
+
+<ParamField path="invoice_number" type="string" required>
+  Unique invoice number for the transaction
+</ParamField>
+
+<ParamField path="destination_bank_id" type="string" required>
+  Destination bank code (e.g., "0105" for Mercantil)
+</ParamField>
+
+<ParamField path="destination_id" type="string" required>
+  Destination identification number
+</ParamField>
+
+<ParamField path="destination_mobile_number" type="string" required>
+  Destination mobile phone number (10 digits, no country code)
+</ParamField>
+
+<ParamField path="origin_mobile_number" type="string" required>
+  Origin mobile phone number (10 digits, no country code)
+</ParamField>
+
+<ParamField path="payment_reference" type="string" required>
+  Payment reference number
+</ParamField>
+
+<ParamField path="twofactor_auth" type="string" required>
+  Two-factor authentication token
+</ParamField>
+
+<ParamField path="ipaddress" type="string" required>
+  Customer's IP address
+</ParamField>
+
+#### Request Example
+
+```javascript
+import { api_mercantil_c2p_pay } from '@/guards/firebase/firebase';
+
+const paymentResponse = await api_mercantil_c2p_pay({
+  amount: 5000,
+  invoice_number: "INV1234567890",
+  destination_bank_id: "0105",
+  destination_id: "J506143755",
+  destination_mobile_number: "4142087552",
+  origin_mobile_number: "4241234567",
+  payment_reference: "123",
+  twofactor_auth: "abc123xyz",
+  ipaddress: "192.168.1.1"
+});
+```
+
+#### Response
+
+<ResponseField name="transaction_c2p_response" type="object">
+  C2P transaction result
+  
+  <ResponseField name="trx_status" type="string">
+    Transaction status: "approved" or "rejected"
+  </ResponseField>
+  
+  <ResponseField name="trx_internal_status" type="string">
+    Internal status message
+  </ResponseField>
+  
+  <ResponseField name="payment_reference" type="string">
+    Payment reference number
+  </ResponseField>
+  
+  <ResponseField name="invoice_number" type="string">
+    Invoice number
+  </ResponseField>
+  
+  <ResponseField name="processing_date" type="string">
+    Processing date
+  </ResponseField>
+</ResponseField>
+
+---
+
+## BCV Mobile Payment Function
+
+### mobile_payment_bcv
+
+Verifies a mobile payment (Pago Móvil) transaction with Banco de Venezuela (BCV).
+
+<ParamField path="ced_pag" type="string" required>
+  Payer identification: ID type + ID number (e.g., "V12345678")
+</ParamField>
+
+<ParamField path="tel_pag" type="string" required>
+  Payer's phone number (10 digits, no country code)
+</ParamField>
+
+<ParamField path="tel_dest" type="string" required>
+  Destination phone number
+</ParamField>
+
+<ParamField path="referencia" type="string" required>
+  Payment reference number
+</ParamField>
+
+<ParamField path="fec_pag" type="string" required>
+  Payment date in DD/MM/YYYY format
+</ParamField>
+
+<ParamField path="importe" type="number" required>
+  Payment amount in Venezuelan Bolívares (VES)
+</ParamField>
+
+<ParamField path="cod_ban_origen" type="string" required>
+  Origin bank code (4 digits)
+</ParamField>
+
+#### Request Example
+
+```javascript
+import { mobile_payment_bcv } from '@/guards/firebase/firebase';
+
+const currentDate = new Date().toLocaleDateString('es-VE');
+
+const paymentResponse = await mobile_payment_bcv({
+  ced_pag: "V12345678",
+  tel_pag: "4241234567",
+  tel_dest: "04142087552",
+  referencia: "123456",
+  fec_pag: currentDate,
+  importe: 5000,
+  cod_ban_origen: "0102"
+});
+```
+
+#### Response
+
+<ResponseField name="resultado" type="object">
+  Verification result from BCV
+  
+  <ResponseField name="code" type="number">
+    Result code (1000 = success)
+  </ResponseField>
+  
+  <ResponseField name="message" type="string">
+    Result message
+  </ResponseField>
+  
+  <ResponseField name="data" type="object">
+    Transaction data
+    
+    <ResponseField name="status" type="string">
+      Transaction status
+    </ResponseField>
+    
+    <ResponseField name="amount" type="number">
+      Verified amount
+    </ResponseField>
+    
+    <ResponseField name="reason" type="string">
+      Transaction description
+    </ResponseField>
+    
+    <ResponseField name="referencia" type="string">
+      Transaction reference
+    </ResponseField>
+  </ResponseField>
+</ResponseField>
+
+```json
+{
+  "resultado": {
+    "code": 1000,
+    "message": "Transacción validada exitosamente",
+    "data": {
+      "status": "approved",
+      "amount": 5000,
+      "reason": "Pago Móvil",
+      "referencia": "123456"
+    }
+  }
+}
+```
+
+<Warning>
+  Code 1000 indicates successful verification. Any other code means the payment could not be verified.
+</Warning>
+
+## Error Handling
+
+All payment functions can throw errors. Always implement proper error handling:
+
+```javascript
+try {
+  const response = await paymentFunction({ ...params });
+  
+  if (response?.data?.transaction_response?.trx_status === "approved") {
+    // Payment successful
+  } else {
+    // Payment failed
+    const errorMessage = response?.data?.transaction_response?.trx_internal_status;
+    throw new Error(errorMessage || 'Payment failed');
+  }
+} catch (error) {
+  console.error('Payment error:', error);
+  // Show error to user
+}
+```

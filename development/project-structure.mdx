@@ -1,0 +1,346 @@
+---
+title: 'Project Structure'
+description: 'Understand the organization and architecture of the TradeMaster Transactions codebase'
+---
+
+This guide explains how the TradeMaster Transactions Portales project is organized and the conventions used throughout the codebase.
+
+## Directory Overview
+
+The project follows a feature-based organization pattern:
+
+```
+trademastertransactions-portales/
+├── public/                    # Static assets
+├── src/                       # Source code
+│   ├── assets/               # Images, fonts, and media files
+│   ├── components/           # Reusable UI components
+│   │   └── ui/              # Shadcn/Radix UI components
+│   ├── guards/              # Authentication and service configuration
+│   │   ├── authGuard/       # Route protection
+│   │   ├── firebase/        # Firebase configuration
+│   │   └── stripe/          # Stripe payment setup
+│   ├── layouts/             # Page layout components
+│   │   ├── blank/           # Minimal layout (auth pages)
+│   │   └── full/            # Main app layout with navigation
+│   ├── routes/              # Route configuration
+│   ├── store/               # Redux state management
+│   │   └── apps/            # Feature-based Redux slices
+│   ├── utils/               # Helper functions
+│   └── views/               # Page components
+│       ├── auth/            # Authentication pages
+│       ├── event/           # Event detail page
+│       ├── eventList/       # Events listing
+│       ├── home/            # Homepage
+│       ├── purchaseOrder/   # Checkout flow
+│       └── user/            # User profile
+├── index.html               # HTML entry point
+├── package.json             # Dependencies and scripts
+├── tailwind.config.js       # Tailwind CSS configuration
+└── vite.config.js           # Vite build configuration
+```
+
+## Core Directories
+
+### `/src/components`
+
+Reusable UI components built with Radix UI primitives and styled with Tailwind CSS.
+
+**Location**: `src/components/ui/`
+
+**Available Components**:
+- `Accordion.js` - Collapsible content sections
+- `Alert.js` - Notification messages
+- `Avatar.js` - User profile images
+- `Button.js` - Interactive buttons with variants
+- `Card.js` - Content containers
+- `Dialog.js` - Modal dialogs
+- `DropdownMenu.js` - Contextual menus
+- `Input.js` - Form input fields
+- `Label.js` - Form labels
+- `Loading.js` - Loading indicators
+- `ScrollArea.js` - Custom scrollable areas
+- `Select.js` - Dropdown selectors
+- `Separator.js` - Visual dividers
+- `Sheet.js` - Slide-out panels
+- `Slider.js` - Range inputs
+- `Switch.js` - Toggle switches
+- `Table.js` - Data tables
+- `Tabs.js` - Tabbed interfaces
+
+### `/src/guards`
+
+Authentication guards and third-party service configurations.
+
+#### Authentication Guards
+
+**`authGuard/AuthGuard.js`** - Protects authenticated routes (see `src/guards/authGuard/AuthGuard.js:5-22`)
+
+```javascript
+const AuthGuard = ({ children }) => {
+  const isAuthenticated = useSelector((state) => state.auth.isAuthenticated);
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  useEffect(() => {
+    if (!isAuthenticated) {
+      // Save current URL to return after login
+      sessionStorage.setItem('returnUrl', location.pathname + location.search);
+      navigate('/auth/checkEmail', { replace: true });
+    }
+  }, [isAuthenticated, location, navigate]);
+
+  return children;
+};
+```
+
+**`authGuard/GuestGuard.js`** - Redirects authenticated users away from auth pages (see `src/guards/authGuard/GuestGuard.js:5-29`)
+
+#### Service Configuration
+
+**`firebase/firebase.js`** - Firebase initialization and Cloud Functions setup (see `src/guards/firebase/firebase.js:7-61`)
+
+**`stripe/stripeConfig.js`** - Stripe payment gateway configuration (see `src/guards/stripe/stripeConfig.js:5-24`)
+
+### `/src/layouts`
+
+Page layout wrapper components that provide consistent structure across views.
+
+#### Layout Types
+
+**`full/FullLayout.js`** - Main application layout with:
+- Navigation header
+- Footer
+- Content area
+- Used for authenticated and public pages
+
+**`blank/BlankLayout.js`** - Minimal layout for:
+- Authentication pages (login, register)
+- Error pages (404)
+- No navigation or chrome
+
+**Loadable Component** (`full/shared/loadable/Loadable.js:5-12`):
+
+```javascript
+const Loadable = (Component) => (props) =>
+  (
+    <Suspense fallback={<Spinner />}>
+      <Component {...props} />
+    </Suspense>
+  );
+```
+
+This higher-order component wraps lazy-loaded pages with a loading spinner during code splitting.
+
+### `/src/routes`
+
+Centralized routing configuration using React Router v6.
+
+**Key File**: `router.js` - See [Routing and Navigation](/development/routing) for details
+
+### `/src/store`
+
+Redux store configuration and state slices.
+
+**Key Files**:
+- `Store.js` - Redux store setup with persistence
+- `apps/` - Feature-based Redux slices
+
+See [State Management](/development/state-management) for detailed documentation.
+
+### `/src/views`
+
+Page-level components organized by feature.
+
+**Structure**:
+
+```
+views/
+├── auth/                    # Authentication flows
+│   ├── login/
+│   ├── register/
+│   ├── forgotPassword/
+│   ├── emailCheck/
+│   └── MissingPage.js      # 404 page
+├── event/                   # Single event detail
+├── eventList/               # Browse all events
+├── home/                    # Landing page
+├── purchaseOrder/           # Ticket checkout
+├── purchaseSuccess/         # Order confirmation
+├── spinner/                 # Loading spinner component
+├── contact/                 # Contact page
+└── user/
+    └── profile/            # User profile management
+```
+
+### `/src/utils`
+
+Shared utility functions used across the application.
+
+**Available Utilities**:
+- `cn.js` - Class name utility for Tailwind (clsx + tailwind-merge)
+- `convertTimestamp.js` - Firebase timestamp conversion helpers
+
+## Naming Conventions
+
+### Files and Directories
+
+- **Components**: PascalCase with `.js` extension (e.g., `Button.js`, `AuthGuard.js`)
+- **Utilities**: camelCase with `.js` extension (e.g., `convertTimestamp.js`)
+- **Directories**: camelCase (e.g., `authGuard/`, `purchaseOrder/`)
+- **Styles**: kebab-case with `.css` extension (e.g., `spinner.css`)
+
+### Code Conventions
+
+**React Components**:
+```javascript
+// Functional components with named exports
+const ComponentName = ({ prop1, prop2 }) => {
+  // Component logic
+  return <div>...</div>;
+};
+
+export default ComponentName;
+```
+
+**Redux Slices**:
+```javascript
+// Feature slice with actions and reducers
+export const featureSlice = createSlice({
+  name: 'feature',
+  initialState,
+  reducers: {
+    actionName: (state, action) => {
+      // Reducer logic
+    },
+  },
+});
+
+export const { actionName } = featureSlice.actions;
+export default featureSlice.reducer;
+```
+
+**Route Guards**:
+```javascript
+// Higher-order component pattern
+const GuardName = ({ children }) => {
+  // Guard logic
+  return children;
+};
+
+export default GuardName;
+```
+
+## Module Organization
+
+### Component Structure
+
+Each feature view follows this pattern:
+
+```
+featureName/
+├── FeatureName.js          # Main component
+└── feature.css             # Feature-specific styles (optional)
+```
+
+### Redux Slice Structure
+
+Each feature slice is organized in its own directory:
+
+```
+store/apps/featureName/
+└── featureSlice.js         # State, actions, and reducers
+```
+
+## Import Patterns
+
+### Path Aliases
+
+The project uses Vite path aliases (configured in `vite.config.js:12-14`):
+
+```javascript
+import Button from '@/components/ui/Button';
+```
+
+The `@` symbol maps to the `src/` directory.
+
+### Relative Imports
+
+For nearby files, use relative imports:
+
+```javascript
+import AuthGuard from '../guards/authGuard/AuthGuard';
+```
+
+### Third-Party Libraries
+
+Import from package name:
+
+```javascript
+import { useSelector } from 'react-redux';
+import { useNavigate } from 'react-router-dom';
+```
+
+## Technology Stack
+
+### Core Framework
+- **React 18.3.1** - UI library with concurrent features
+- **Vite 5.4.1** - Fast build tool and dev server
+
+### State Management
+- **Redux Toolkit 2.2.7** - State management
+- **Redux Persist 6.0.0** - Persist state to localStorage
+- **Redux Persist Transform Encrypt 5.1.1** - Encrypt persisted state
+
+### Routing
+- **React Router 6.26.1** - Client-side routing
+
+### UI Components
+- **Radix UI** - Unstyled, accessible component primitives
+- **Tailwind CSS 3.4.10** - Utility-first CSS framework
+- **Lucide React** - Icon library
+- **Tabler Icons** - Additional icons
+
+### Backend Services
+- **Firebase 10.13.1** - Authentication, Firestore, Cloud Functions
+- **Stripe** - Payment processing
+
+### Forms & Validation
+- **Formik 2.4.6** - Form management
+- **Yup 1.4.0** - Schema validation
+
+### Utilities
+- **Axios 1.10.0** - HTTP client
+- **Moment 2.30.1** - Date manipulation
+- **Clsx** - Conditional className utility
+- **React Toastify** - Toast notifications
+
+## Best Practices
+
+<Note>
+**Code Organization**
+- Keep components small and focused on a single responsibility
+- Extract reusable logic into custom hooks
+- Place shared components in `/src/components/ui`
+- Place feature-specific components in their view directory
+</Note>
+
+<Note>
+**State Management**
+- Use Redux for global state (auth, config, events)
+- Use local state (useState) for UI-only state
+- Keep Redux slices focused on a single domain
+</Note>
+
+<Note>
+**Styling**
+- Use Tailwind utility classes for styling
+- Use the `cn()` utility for conditional classes
+- Avoid inline styles unless absolutely necessary
+</Note>
+
+## Next Steps
+
+- Explore [State Management](/development/state-management) patterns
+- Learn about [Routing and Navigation](/development/routing)
+- Review the [Local Setup](/development/local-setup) guide

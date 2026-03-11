@@ -1,80 +1,485 @@
 ---
-title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+title: Quick Start Guide
+description: Get TradeMaster Transactions Portales up and running in minutes
 ---
 
-## Get started in three steps
+## Prerequisites
 
-Get your documentation site running locally and make your first customization.
-
-### Step 1: Set up your local environment
-
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
-    
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
-    
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
-
-### Step 2: Deploy your changes
-
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
-    
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
-
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
-
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
-
-### Step 3: Go live
-
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
-
-## Next steps
-
-Now that you have your docs running, explore these key features:
+Before you begin, ensure you have the following installed:
 
 <CardGroup cols={2}>
-
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
-
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
-
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
-
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
-
+  <Card title="Node.js" icon="node-js">
+    Version 18.x or higher
+  </Card>
+  
+  <Card title="npm or yarn" icon="package">
+    Latest stable version
+  </Card>
+  
+  <Card title="Git" icon="git">
+    For version control
+  </Card>
+  
+  <Card title="Firebase CLI" icon="fire">
+    For deployment (optional)
+  </Card>
 </CardGroup>
 
 <Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
+  This guide assumes you have basic knowledge of React, Redux, and Firebase. If you're new to these technologies, check out their official documentation first.
+</Note>
+
+## Installation
+
+<Steps>
+
+<Step title="Clone the Repository">
+  Clone the TradeMaster Transactions Portales repository to your local machine:
+  
+  ```bash
+  git clone https://github.com/your-org/trademastertransactions-portales.git
+  cd trademastertransactions-portales
+  ```
+</Step>
+
+<Step title="Install Dependencies">
+  Install all required npm packages:
+  
+  ```bash
+  npm install
+  ```
+  
+  This will install all dependencies defined in package.json:6, including:
+  
+  - React 18.3.1 and React Router
+  - Redux Toolkit and Redux Persist
+  - Firebase SDK 10.13.1
+  - Stripe SDK
+  - Tailwind CSS and Radix UI components
+  - Form libraries (Formik, Yup)
+  
+  <Note>
+    The installation may take a few minutes depending on your internet connection. You'll see progress for all 60+ dependencies.
+  </Note>
+</Step>
+
+<Step title="Configure Environment Variables">
+  Create a `.env.local` file in the root directory for your environment-specific configuration:
+  
+  ```bash .env.local
+  # Stripe Configuration
+  VITE_STRIPE_PUBLIC_KEY=pk_test_your_stripe_public_key_here
+  
+  # Optional: Firebase Configuration Override
+  # (Only needed if you want to use a different Firebase project)
+  # VITE_FIREBASE_API_KEY=your_api_key
+  # VITE_FIREBASE_AUTH_DOMAIN=your_auth_domain
+  # VITE_FIREBASE_PROJECT_ID=your_project_id
+  ```
+  
+  <Warning>
+    **Never commit `.env.local` to version control!** This file contains sensitive API keys. The `.gitignore` file already excludes it.
+  </Warning>
+  
+  ### Getting Your Stripe API Key
+  
+  1. Sign up for a [Stripe account](https://stripe.com)
+  2. Navigate to **Developers > API keys**
+  3. Copy your **Publishable key** (starts with `pk_test_` for test mode)
+  4. Add it to your `.env.local` file
+  
+  The Stripe configuration is loaded in src/guards/stripe/stripeConfig.js:5:
+  
+  ```javascript src/guards/stripe/stripeConfig.js
+  const STRIPE_PUBLIC_KEY = import.meta.env.VITE_STRIPE_PUBLIC_KEY || 'pk_test_...';
+  
+  export const initializeStripe = async () => {
+    if (!STRIPE_PUBLIC_KEY || STRIPE_PUBLIC_KEY === 'pk_test_...') {
+      console.error('❌ STRIPE_PUBLIC_KEY no está configurada.');
+      throw new Error('La clave pública de Stripe no está configurada');
+    }
+    
+    if (!stripePromise) {
+      stripePromise = loadStripe(STRIPE_PUBLIC_KEY);
+    }
+    return stripePromise;
+  };
+  ```
+</Step>
+
+<Step title="Configure Firebase">
+  The application uses Firebase for backend services. The default configuration connects to the production Firebase project:
+  
+  ```javascript src/guards/firebase/firebase.js
+  const firebaseConfig = {
+    apiKey: "AIzaSyD1bPm1YvtQKwAyXNUxE--YbkbEwydCuCI",
+    authDomain: "trademastertransaction-project.firebaseapp.com",
+    projectId: "trademastertransaction-project",
+    storageBucket: "trademastertransaction-project.appspot.com",
+    messagingSenderId: "324510208107",
+    appId: "1:324510208107:web:63af97fd7bea1f9e93212e"
+  };
+  ```
+  
+  <Note>
+    For development, you can use the default Firebase configuration. For production deployments, create your own Firebase project and update the configuration.
+  </Note>
+  
+  ### Setting Up Your Own Firebase Project (Optional)
+  
+  If you want to use your own Firebase project:
+  
+  1. Create a new project in the [Firebase Console](https://console.firebase.google.com)
+  2. Enable **Authentication** (Email/Password provider)
+  3. Create a **Firestore Database** (start in test mode)
+  4. Enable **Cloud Storage**
+  5. Deploy the Cloud Functions (see deployment guide)
+  6. Update the Firebase configuration in src/guards/firebase/firebase.js:7
+  
+  ### Required Firestore Collections
+  
+  The application expects these Firestore collections:
+  
+  - `portals_tenants`: Maps subdomains to portal configurations
+  - `portals`: Stores portal metadata (branding, client_id, settings)
+  - `events`: Event listings with ticket inventory
+  - `orders`: Purchase orders and transaction records
+  - `users`: User profiles and authentication data
+</Step>
+
+<Step title="Start Development Server">
+  Launch the Vite development server:
+  
+  ```bash
+  npm run dev
+  ```
+  
+  You should see output similar to:
+  
+  ```bash
+  VITE v5.4.1  ready in 823 ms
+  
+  ➜  Local:   http://localhost:5173/
+  ➜  Network: use --host to expose
+  ➜  press h + enter to show help
+  ```
+  
+  The development server is configured in vite.config.js:9 with hot module replacement (HMR) enabled.
+  
+  <Note>
+    Vite provides near-instant hot module replacement. Changes to your code will reflect in the browser within milliseconds.
+  </Note>
+</Step>
+
+<Step title="Access the Portal">
+  Open your browser and navigate to:
+  
+  ```
+  http://localhost:5173/
+  ```
+  
+  ### Understanding the URL Structure
+  
+  In production, the portal uses subdomains for multi-tenancy:
+  
+  ```
+  https://[subdomain].trademastertransactions.com/
+  ```
+  
+  The application loads tenant configuration based on the subdomain (see src/App.jsx:24):
+  
+  ```javascript src/App.jsx
+  const currentUrl = window.location.href;
+  const splitUrl = currentUrl.split('/');
+  const dataPage = await getDoc(doc(db, "portals_tenants", splitUrl[2]));
+  ```
+  
+  For local development, you'll need to configure a tenant entry in Firestore or modify the code to use a default tenant.
+  
+  <Warning>
+    If you see a redirect to `https://trademastertransactions.com/`, it means no tenant configuration was found. You need to set up a tenant in Firestore or modify the initialization logic.
+  </Warning>
+</Step>
+
+</Steps>
+
+## Verify Installation
+
+After starting the development server, verify that everything is working:
+
+<Tabs>
+  <Tab title="Check Console">
+    Open browser DevTools (F12) and check the Console tab. You should see:
+    
+    ```
+    ✅ Firebase initialized successfully
+    ✅ Redux store configured
+    ✅ Router loaded with X routes
+    ```
+    
+    Any errors or warnings should be investigated before proceeding.
+  </Tab>
+  
+  <Tab title="Check Network">
+    In the Network tab, verify:
+    
+    - Firestore requests are successful (200 status)
+    - Firebase Authentication is connecting
+    - No CORS errors
+    - Assets are loading correctly
+  </Tab>
+  
+  <Tab title="Check Redux">
+    Install [Redux DevTools](https://github.com/reduxjs/redux-devtools) browser extension to inspect:
+    
+    - Initial state hydration from redux-persist
+    - Actions being dispatched (setup, events, auth)
+    - State updates in real-time
+    
+    The Redux store is configured in src/store/Store.js:59 with persistence enabled.
+  </Tab>
+</Tabs>
+
+## Development Workflow
+
+### File Structure Overview
+
+Understand the key directories:
+
+```
+trademastertransactions-portales/
+├── src/
+│   ├── components/       # Reusable UI components
+│   │   └── ui/          # Radix UI-based components
+│   ├── guards/          # Authentication & API configuration
+│   │   ├── authGuard/   # Route guards
+│   │   ├── firebase/    # Firebase setup
+│   │   └── stripe/      # Stripe configuration
+│   ├── layouts/         # Page layouts (Full, Blank)
+│   ├── routes/          # React Router configuration
+│   ├── store/           # Redux store & slices
+│   │   └── apps/        # Feature-specific slices
+│   ├── views/           # Page components
+│   │   ├── auth/        # Authentication pages
+│   │   ├── event/       # Event details
+│   │   ├── home/        # Landing page
+│   │   └── purchaseOrder/ # Checkout flow
+│   ├── App.jsx          # Main application component
+│   └── main.jsx         # Application entry point
+├── firebase.json        # Firebase Hosting config
+├── vite.config.js       # Vite configuration
+├── tailwind.config.js   # Tailwind CSS config
+└── package.json         # Dependencies & scripts
+```
+
+### Available Scripts
+
+The following npm scripts are available (defined in package.json:6):
+
+```bash
+# Start development server with HMR
+npm run dev
+
+# Build for production
+npm run build
+
+# Preview production build locally
+npm run preview
+
+# Run ESLint
+npm run lint
+```
+
+### Making Your First Change
+
+<Steps>
+
+<Step title="Modify the Home Page">
+  Open `src/views/home/Home.js` and make a change to the component. The browser will update automatically thanks to Vite's HMR.
+</Step>
+
+<Step title="Add a New Route">
+  To add a new page:
+  
+  1. Create a new component in `src/views/`
+  2. Add the route to `src/routes/router.js`:
+  
+  ```javascript src/routes/router.js
+  const NewPage = Loadable(lazy(() => import("../views/newPage/NewPage")));
+  
+  const Router = [
+    {
+      path: "/",
+      element: <FullLayout />,
+      children: [
+        // ... existing routes
+        { path: "/new-page", element: <NewPage /> },
+      ],
+    },
+  ];
+  ```
+  
+  See src/routes/router.js:29 for the complete router configuration.
+</Step>
+
+<Step title="Create a Redux Slice">
+  To add new state management:
+  
+  1. Create a new slice in `src/store/apps/yourFeature/`
+  2. Add the reducer to `src/store/Store.js`:
+  
+  ```javascript
+  import yourFeatureReducer from "./apps/yourFeature/yourFeatureSlice";
+  
+  const appReducer = combineReducers({
+    // ... existing reducers
+    yourFeature: yourFeatureReducer,
+  });
+  ```
+  
+  See src/store/Store.js:39 for how other slices are integrated.
+</Step>
+
+</Steps>
+
+## Testing Authentication
+
+To test the authentication flow:
+
+<Steps>
+
+<Step title="Navigate to Login">
+  Go to `http://localhost:5173/auth/login`
+</Step>
+
+<Step title="Create Test Account">
+  Click on "Register" and create a test account with:
+  
+  - Valid email address
+  - Password (minimum 6 characters)
+  - Required profile information
+  
+  The registration flow is handled by Firebase Authentication.
+</Step>
+
+<Step title="Verify Protected Routes">
+  Try accessing protected routes like:
+  
+  - `/profileUser` - User profile page
+  - `/purchaseOrder/:eventId` - Checkout flow
+  
+  These routes are wrapped with `AuthGuard` (see src/guards/authGuard/AuthGuard.js:5) and require authentication.
+</Step>
+
+</Steps>
+
+## Testing Payment Integration
+
+<Warning>
+  Always use Stripe **test mode** keys during development. Never process real payments in development.
+</Warning>
+
+### Test Stripe Payments
+
+Use Stripe's test card numbers:
+
+| Card Number | Description |
+|-------------|-------------|
+| 4242 4242 4242 4242 | Successful payment |
+| 4000 0000 0000 9995 | Declined (insufficient funds) |
+| 4000 0025 0000 3155 | Requires authentication (3D Secure) |
+
+- Use any future expiration date
+- Use any 3-digit CVC
+- Use any ZIP code
+
+See the [Stripe Testing Guide](https://stripe.com/docs/testing) for more test cards.
+
+## Common Issues
+
+<AccordionGroup>
+  <Accordion title="Port 5173 already in use">
+    Another process is using port 5173. Either:
+    
+    - Kill the existing process
+    - Or run Vite on a different port:
+    
+    ```bash
+    npm run dev -- --port 3000
+    ```
+  </Accordion>
+  
+  <Accordion title="Firebase connection errors">
+    Check that:
+    
+    - Your internet connection is active
+    - Firebase configuration is correct in src/guards/firebase/firebase.js:7
+    - Firestore security rules allow access
+    - The Firebase project is active (not disabled)
+  </Accordion>
+  
+  <Accordion title="Stripe not initializing">
+    Verify:
+    
+    - `VITE_STRIPE_PUBLIC_KEY` is set in `.env.local`
+    - The key starts with `pk_test_` (for test mode)
+    - You've restarted the dev server after adding the environment variable
+    
+    See src/guards/stripe/stripeConfig.js:11 for initialization logic.
+  </Accordion>
+  
+  <Accordion title="Module not found errors">
+    Try:
+    
+    ```bash
+    # Clear node_modules and reinstall
+    rm -rf node_modules package-lock.json
+    npm install
+    
+    # Clear Vite cache
+    rm -rf node_modules/.vite
+    ```
+  </Accordion>
+  
+  <Accordion title="Redux state not persisting">
+    Check browser DevTools:
+    
+    - Application > Local Storage > `persist:root` key should exist
+    - If using incognito/private mode, persistence may be blocked
+    - Redux persist is configured in src/store/Store.js:25
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Architecture Guide" icon="diagram-project" href="/architecture">
+    Understand the system architecture and design patterns
+  </Card>
+  
+  <Card title="Authentication Setup" icon="lock" href="/features/user-authentication">
+    Configure Firebase Authentication and user management
+  </Card>
+  
+  <Card title="Payment Integration" icon="credit-card" href="/features/payment-processing">
+    Set up Stripe and Mercantil payment gateways
+  </Card>
+  
+  <Card title="Multi-Tenant Config" icon="building" href="/features/multi-tenant">
+    Configure tenant portals and branding
+  </Card>
+</CardGroup>
+
+## Getting Help
+
+If you encounter issues:
+
+1. Check the browser console for error messages
+2. Review the [GitHub Issues](https://github.com/your-org/trademastertransactions-portales/issues)
+3. Check Firebase Console for backend errors
+4. Review Stripe Dashboard for payment issues
+5. Enable Redux DevTools for state debugging
+
+<Note>
+  Keep your development environment up to date by regularly running `npm update` to get the latest dependency patches.
 </Note>

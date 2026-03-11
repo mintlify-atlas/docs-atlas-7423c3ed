@@ -1,0 +1,465 @@
+---
+title: 'Event Management'
+description: 'Browse, filter, and view detailed event information with real-time availability'
+icon: 'calendar'
+---
+
+## Overview
+
+The event management system provides comprehensive browsing, filtering, and detail viewing capabilities for events. Users can explore events through various filters including category, location, date, and search terms, with real-time availability updates.
+
+## Event List Page
+
+The main event listing provides a rich filtering interface with category selection, location filtering, date-based filtering, and full-text search.
+
+### Component Structure
+
+```javascript title="src/views/eventList/EventList.js" {1-11}
+import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router';
+import { useDispatch, useSelector } from 'react-redux';
+import { Button } from '../../components/ui/Button';
+import { Input } from '../../components/ui/Input';
+import { convertTimestamp } from '../../utils/convertTimestamp';
+import { setLoadingData } from '../../store/apps/loading/loadingSlice';
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '../../components/ui/Card';
+
+const EventList = () => {
+  const events = useSelector((state) => state.events.events);
+  // Component logic...
+};
+```
+
+## Filtering System
+
+### Available Filters
+
+The event list supports multiple filtering dimensions:
+
+<Tabs>
+  <Tab title="Category">
+    Filter by event type (Concert, Sports, Theater, etc.):
+    
+    ```javascript title="src/views/eventList/EventList.js:55-68"
+    const categories = [
+      { name: "Todos", icon: <Filter className="h-5 w-5" /> },
+      { name: "Concierto", icon: <Music className="h-5 w-5" /> },
+      { name: "Deporte", icon: <Ticket className="h-5 w-5" /> },
+      { name: "Teatro", icon: <Theater className="h-5 w-5" /> },
+      { name: "Infantiles", icon: <Baby className="h-5 w-5" /> },
+      { name: "Conferencias", icon: <Presentation className="h-5 w-5" /> },
+      { name: "Talleres", icon: <Wrench className="h-5 w-5" /> },
+      { name: "Cursos", icon: <GraduationCap className="h-5 w-5" /> },
+      { name: "Ballet", icon: <Sparkles className="h-5 w-5" /> },
+      { name: "Valet Parking", icon: <Car className="h-5 w-5" /> },
+      { name: "Donación", icon: <HandHeart className="h-5 w-5" /> },
+      { name: "Otro", icon: <Users className="h-5 w-5" /> },
+    ];
+    ```
+  </Tab>
+  
+  <Tab title="Location">
+    Filter by venue location:
+    
+    ```javascript title="src/views/eventList/EventList.js:86-93"
+    // Extract unique locations from events
+    const uniqueLocations = ['Todas'];
+    
+    events.forEach(evento => {
+      if (evento?.venue_name && !uniqueLocations.includes(evento.venue_name)) {
+        uniqueLocations.push(evento.venue_name);
+      }
+    });
+    
+    setLocations(uniqueLocations);
+    ```
+  </Tab>
+  
+  <Tab title="Date">
+    Filter by month and year:
+    
+    ```javascript title="src/views/eventList/EventList.js:95-101"
+    // Extract months and years from event dates
+    if (evento?.date_start) {
+      const dateStr = convertTimestamp(evento.date_start);
+      const date = parseDate(dateStr);
+      months.add(date.getMonth());
+      years.add(date.getFullYear());
+    }
+    ```
+  </Tab>
+  
+  <Tab title="Search">
+    Full-text search across title, description, and location:
+    
+    ```javascript title="src/views/eventList/EventList.js:171-177"
+    if (searchTerm) {
+      filtered = filtered.filter(
+        event =>
+          event.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          event.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          event.location.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+    }
+    ```
+  </Tab>
+</Tabs>
+
+### Filter Implementation
+
+<Steps>
+  <Step title="Initialize Filter State">
+    Set up state for all filter dimensions:
+    
+    ```javascript title="src/views/eventList/EventList.js:34-46"
+    const [filteredEvents, setFilteredEvents] = useState([]);
+    const [displayedEvents, setDisplayedEvents] = useState([]);
+    const [searchTerm, setSearchTerm] = useState('');
+    const [selectedCategory, setSelectedCategory] = useState('Todos');
+    const [selectedLocation, setSelectedLocation] = useState('Todas');
+    const [selectedMonth, setSelectedMonth] = useState('Todos');
+    const [selectedYear, setSelectedYear] = useState('Todos');
+    const [showFilters, setShowFilters] = useState(false);
+    ```
+  </Step>
+  
+  <Step title="Apply Filters on Change">
+    Re-filter events whenever any filter changes:
+    
+    ```javascript title="src/views/eventList/EventList.js:146-216"
+    useEffect(() => {
+      const filterEvents = () => {
+        let filtered = [...events];
+        
+        // Apply search filter
+        if (searchTerm) {
+          filtered = filtered.filter(event =>
+            event.title.toLowerCase().includes(searchTerm.toLowerCase())
+          );
+        }
+        
+        // Apply category filter
+        if (selectedCategory !== 'Todos') {
+          filtered = filtered.filter(event => 
+            event.genre === selectedCategory
+          );
+        }
+        
+        // Apply location filter
+        if (selectedLocation !== 'Todas') {
+          filtered = filtered.filter(event => 
+            event.location === selectedLocation
+          );
+        }
+        
+        // Apply month filter
+        if (selectedMonth !== 'Todos') {
+          filtered = filtered.filter(event => 
+            event.month === Number(selectedMonth)
+          );
+        }
+        
+        // Apply year filter
+        if (selectedYear !== 'Todos') {
+          filtered = filtered.filter(event => 
+            event.year === Number(selectedYear)
+          );
+        }
+        
+        // Sort by date
+        filtered = filtered.sort((a, b) => a.dateObj - b.dateObj);
+        
+        setFilteredEvents(filtered);
+        setDisplayedEvents(filtered.slice(0, 9));
+      };
+      
+      filterEvents();
+    }, [events, searchTerm, selectedCategory, selectedLocation, selectedMonth, selectedYear]);
+    ```
+  </Step>
+  
+  <Step title="Render Filter UI">
+    Display interactive filter controls:
+    
+    ```javascript title="src/views/eventList/EventList.js:252-276"
+    <div className="flex flex-col md:flex-row gap-4">
+      <div className="relative flex-grow">
+        <Search className="absolute left-3 top-2.5 h-5 w-5 text-gray-400" />
+        <Input
+          placeholder="Buscar eventos..."
+          className="pl-10"
+          value={searchTerm}
+          onChange={handleSearch}
+        />
+      </div>
+      <Button
+        variant="outline"
+        onClick={() => setShowFilters(!showFilters)}
+      >
+        <SlidersHorizontal className="h-4 w-4" />
+        Filtros
+      </Button>
+    </div>
+    ```
+  </Step>
+</Steps>
+
+## Event Detail Page
+
+The event detail view provides comprehensive information about a single event, including pricing, zones, venue details, and related events.
+
+### Loading Event Data
+
+```javascript title="src/views/event/Event.js:22-83"
+useEffect(() => {
+  const getEventData = () => {
+    dispatch(setLoadingData({ loading: true }));
+    window.scrollTo(0, 0);
+    
+    const actualEvent = events.find((x) => x.event_id === params.id);
+    
+    const actualEventData = actualEvent ? {
+      title: actualEvent.event_name,
+      dateStart: convertTimestampLL(actualEvent.date_start),
+      dateEnd: convertTimestampLL(actualEvent.date_end),
+      timeStart: convertTimestampToHour(actualEvent.date_start),
+      timeEnd: convertTimestampToHour(actualEvent.date_end),
+      venue: actualEvent.venue_name,
+      venueId: actualEvent.venue_id,
+      description: actualEvent.event_desc,
+      image: actualEvent.event_media[0],
+      maxCapacity: actualEvent.venue_max_capacity,
+      eventType: actualEvent.type,
+      status: actualEvent.status,
+      zones: actualEvent.zones.zone.map((zone) => {
+        const basePrice = zone.price;
+        const tax = basePrice * 0.16;
+        const totalPrice = basePrice + tax;
+        return {
+          id: zone.id,
+          name: zone.name,
+          type: zone.type,
+          description: zone.description,
+          seats: zone.seats,
+          color: zone.color,
+          price: basePrice,
+          tax: tax,
+          total: totalPrice,
+        }
+      }),
+    } : {};
+    
+    setEventDetails(actualEventData);
+    dispatch(setLoadingData({ loading: false }));
+  }
+  
+  getEventData();
+}, [params.id, events]);
+```
+
+### Zone & Pricing Display
+
+Events display pricing information with automatic tax calculation:
+
+```javascript title="src/views/event/Event.js:50-72"
+zones: actualEvent.zones.zone.map((zone) => {
+  const basePrice = zone.price;
+  const tax = basePrice * 0.16;  // 16% IVA
+  const totalPrice = basePrice + tax;
+  
+  return {
+    id: zone.id,
+    name: zone.name,
+    type: zone.type,
+    description: zone.description,
+    seats: zone.seats,
+    color: zone.color,
+    price: basePrice,
+    tax: tax,
+    total: totalPrice,
+  }
+})
+```
+
+### Pricing Table
+
+<CodeGroup>
+```javascript title="Zone Pricing Table"
+<Table>
+  <TableHeader>
+    <TableRow>
+      <TableHead>Zona</TableHead>
+      <TableHead>Tipo</TableHead>
+      <TableHead>Asientos</TableHead>
+      <TableHead>Precio</TableHead>
+      <TableHead>IVA</TableHead>
+      <TableHead>Total</TableHead>
+    </TableRow>
+  </TableHeader>
+  <TableBody>
+    {eventDetails.zones?.map((zone) => (
+      <TableRow key={zone.id}>
+        <TableCell>
+          <div className="flex items-center gap-2">
+            <div
+              className="w-4 h-4 rounded"
+              style={{ backgroundColor: zone.color }}
+            />
+            {zone.name}
+          </div>
+        </TableCell>
+        <TableCell>{zone.type}</TableCell>
+        <TableCell>{zone.seats}</TableCell>
+        <TableCell>${zone.price.toLocaleString()}</TableCell>
+        <TableCell>${zone.tax.toFixed(2)}</TableCell>
+        <TableCell className="font-semibold">
+          ${zone.total.toFixed(2)}
+        </TableCell>
+      </TableRow>
+    ))}
+  </TableBody>
+</Table>
+```
+</CodeGroup>
+
+## Real-Time Availability
+
+<Note>
+  Event availability is calculated in real-time based on active seats and allocated tickets:
+</Note>
+
+```javascript title="src/views/event/Event.js:47-49"
+seatsAllocated: actualEvent.zones.seats_allocated,
+seatsTotal: actualEvent.zones.seats_total,
+seatsAvailable: Number(actualEvent.zones.seats_total) - 
+                Number(actualEvent.zones.seats_allocated),
+```
+
+## Event Card Component
+
+Events are displayed as cards with key information:
+
+```javascript title="src/views/eventList/EventList.js:381-419"
+<Card key={event.id} className="overflow-hidden flex flex-col hover:shadow-lg">
+  <CardHeader className="p-0 cursor-pointer h-48 relative" 
+              onClick={() => navigate(`/event/${event.id}`)}>
+    <img
+      src={event.image}
+      alt={event.title}
+      className="w-full h-full object-cover"
+      onLoad={() => handleImageLoad(event.id)}
+    />
+  </CardHeader>
+  <CardContent className="pt-4 flex-1">
+    <CardTitle className="text-lg">{event.title}</CardTitle>
+    <p className="text-sm text-gray-500 flex items-center mt-2">
+      <Calendar className="mr-2 h-4 w-4" />
+      {event.date}
+    </p>
+    <div className="text-sm text-gray-500 flex items-center mt-1">
+      <Music className="mr-2 h-4 w-4" />
+      {event.genre}
+    </div>
+    <div className="text-sm text-gray-500 flex items-center mt-1">
+      <MapPin className="mr-2 h-4 w-4" />
+      {event.location}
+    </div>
+  </CardContent>
+  <CardFooter className="mt-auto">
+    <Button
+      className="w-full bg-primary hover:bg-primary/90 text-white"
+      onClick={() => navigate(`/event/${event.id}`)}
+    >
+      Comprar entradas
+    </Button>
+  </CardFooter>
+</Card>
+```
+
+## Pagination & Load More
+
+Events are loaded in batches of 9 with a "Load More" button:
+
+```javascript title="src/views/eventList/EventList.js:218-220"
+const handleLoadMore = () => {
+  setDisplayedEvents(filteredEvents.slice(0, displayedEvents.length + 9));
+};
+```
+
+## Share Functionality
+
+Users can share event pages via URL copying:
+
+```javascript title="src/views/event/Event.js:129-153"
+<Button
+  variant="outline"
+  size="icon"
+  onClick={() => {
+    navigator.clipboard.writeText(window.location.href).then(() => {
+      toast.success("Enlace copiado al portapapeles.", {
+        position: "bottom-center",
+        autoClose: 7000,
+        hideProgressBar: false,
+        closeOnClick: true,
+        pauseOnHover: true,
+        draggable: true,
+        theme: "light",
+      });
+    }).catch((err) => {
+      console.error('Error al copiar: ', err)
+      toast.error("Error, No se pudo copiar la URL.", {
+        position: "bottom-center",
+        theme: "light",
+      });
+    })
+  }}
+>
+  <Share2 className="h-4 w-4" />
+</Button>
+```
+
+## Related Events
+
+The event detail page shows up to 3 related events:
+
+```javascript title="src/views/event/Event.js:286-319"
+<div className="mt-8">
+  <h2 className="text-2xl font-semibold text-gray-900 mb-4">
+    Eventos relacionados
+  </h2>
+  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+    {events.slice(0, 3).map((event) => (
+      <Card key={event.event_id}>
+        <CardHeader className="p-0">
+          <img
+            src={event.event_media[0]}
+            alt={event.event_name}
+            className="w-full h-32 object-cover"
+          />
+        </CardHeader>
+        <CardContent className="p-4">
+          <CardTitle className="text-lg">{event.event_name}</CardTitle>
+          <p className="text-sm text-gray-500 flex items-center mt-2">
+            <Calendar className="mr-2 h-4 w-4" /> 
+            {convertTimestamp(event.date_start)}
+          </p>
+        </CardContent>
+        <CardFooter>
+          <Button onClick={() => navigate(`/event/${event.event_id}`)}>
+            Ver detalles
+          </Button>
+        </CardFooter>
+      </Card>
+    ))}
+  </div>
+</div>
+```
+
+## Best Practices
+
+1. **Always filter by tenant** - Events should be filtered by `client_id` to ensure tenant isolation
+2. **Sort by date** - Display events in chronological order by default
+3. **Show active events only** - Filter out inactive events (`status === 'Activo'`)
+4. **Calculate prices with tax** - Always display final prices including 16% IVA
+5. **Provide multiple filter options** - Allow users to filter by category, location, and date
+6. **Implement pagination** - Load events in batches for better performance

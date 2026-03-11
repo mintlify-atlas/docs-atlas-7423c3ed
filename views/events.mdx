@@ -1,0 +1,551 @@
+---
+title: 'Event Views'
+description: 'Event detail page and event list with advanced filtering capabilities'
+---
+
+## Overview
+
+The Events module consists of two main views:
+- **Event Detail** (`src/views/event/Event.js`) - Individual event information page
+- **Event List** (`src/views/eventList/EventList.js`) - Searchable and filterable events catalog
+
+## Event Detail View
+
+**Route:** `/event/:id`
+
+### Purpose
+
+Displays comprehensive information about a specific event including dates, venue, pricing zones, and booking options.
+
+### Redux Integration
+
+```javascript
+const events = useSelector((state) => state.events.events);
+```
+
+### State Management
+
+```javascript
+const [eventDetails, setEventDetails] = useState({});
+const params = useParams();
+```
+
+### Data Loading
+
+<Steps>
+  <Step title="Extract event ID from URL">
+    Uses React Router's `useParams()` to get event ID
+  </Step>
+  <Step title="Find event in Redux store">
+    Searches events array for matching event_id
+  </Step>
+  <Step title="Transform data structure">
+    Converts raw event data to display-friendly format
+  </Step>
+  <Step title="Calculate pricing with taxes">
+    Computes base price, tax (16%), and total for each zone
+  </Step>
+</Steps>
+
+### Event Data Transformation
+
+```javascript
+const actualEventData = {
+  title: actualEvent.event_name,
+  dateStart: convertTimestampLL(actualEvent.date_start),
+  dateEnd: convertTimestampLL(actualEvent.date_end),
+  timeStart: convertTimestampToHour(actualEvent.date_start),
+  timeEnd: convertTimestampToHour(actualEvent.date_end),
+  venue: actualEvent.venue_name,
+  venueId: actualEvent.venue_id,
+  description: actualEvent.event_desc,
+  image: actualEvent.event_media[0],
+  maxCapacity: actualEvent.venue_max_capacity,
+  eventType: actualEvent.type,
+  status: actualEvent.status,
+  mainActivity: actualEvent.type_metadata_main_activity,
+  secondaryActivity: actualEvent.type_metadata_secondary_activity,
+  typeDescription: actualEvent.type_metadata_description,
+  termsOfService: actualEvent.type_metadata_tos,
+  clientName: actualEvent.client_name,
+  seatsAllocated: actualEvent.zones.seats_allocated,
+  seatsTotal: actualEvent.zones.seats_total,
+  seatsAvailable: Number(actualEvent.zones.seats_total) - Number(actualEvent.zones.seats_allocated),
+  zones: actualEvent.zones.zone.map((zone) => {
+    const basePrice = zone.price;
+    const tax = basePrice * 0.16;
+    const totalPrice = basePrice + tax;
+    const corporateBasePrice = zone.corporate_price;
+    const corporateTax = corporateBasePrice * 0.16;
+    const corporateTotalPrice = corporateBasePrice + corporateTax;
+    return {
+      id: zone.id,
+      name: zone.name,
+      type: zone.type,
+      description: zone.description,
+      seats: zone.seats,
+      color: zone.color,
+      public: zone.public,
+      status: zone.status,
+      price: basePrice,
+      tax: tax,
+      total: totalPrice,
+      corporatePrice: corporateBasePrice,
+      corporateTax: corporateTax,
+      corporateTotal: corporateTotalPrice
+    }
+  }),
+  mapUrl: "https://www.google.com/maps/embed?pb=..."
+}
+```
+
+### Layout Structure
+
+```javascript
+<div className="bg-white rounded-lg shadow-xl overflow-hidden">
+  {/* Hero Image */}
+  <img src={eventDetails.image} alt={eventDetails.title} className="w-full object-cover h-[400px]" />
+  
+  <div className="p-6">
+    {/* Header with title and status badge */}
+    <div className="flex justify-between items-start">
+      <div className="flex-1">
+        <h1 className="text-3xl font-bold text-gray-900">{eventDetails.title}</h1>
+        <span className={`px-3 py-1 rounded-full text-sm font-semibold 
+          ${eventDetails.status === 'Activo' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+          {eventDetails.status}
+        </span>
+      </div>
+      <Button variant="outline" size="icon" onClick={handleShare}>
+        <Share2 className="h-4 w-4" />
+      </Button>
+    </div>
+    
+    {/* Tabs for info and location */}
+    <Tabs defaultValue="info">
+      <TabsList>
+        <TabsTrigger value="info">Información</TabsTrigger>
+        <TabsTrigger value="location">Ubicación</TabsTrigger>
+      </TabsList>
+      <TabsContent value="info">{/* Event details */}</TabsContent>
+      <TabsContent value="location">{/* Map */}</TabsContent>
+    </Tabs>
+  </div>
+</div>
+```
+
+### Share Functionality
+
+```javascript
+const handleShare = () => {
+  navigator.clipboard.writeText(window.location.href).then(() => {
+    toast.success("Enlace copiado al portapapeles.", {
+      position: "bottom-center",
+      autoClose: 7000,
+      hideProgressBar: false,
+      closeOnClick: true,
+      pauseOnHover: true,
+      draggable: true,
+      progress: undefined,
+      theme: "light",
+    });
+  }).catch((err) => {
+    console.error('Error al copiar: ', err)
+    toast.error("Error, No se pudo copiar la URL. Por favor, inténtalo de nuevo.");
+  })
+};
+```
+
+### Pricing Table
+
+```javascript
+<Table>
+  <TableHeader>
+    <TableRow>
+      <TableHead>Zona</TableHead>
+      <TableHead>Tipo</TableHead>
+      <TableHead>Asientos</TableHead>
+      <TableHead>Precio</TableHead>
+      <TableHead>IVA</TableHead>
+      <TableHead>Total</TableHead>
+    </TableRow>
+  </TableHeader>
+  <TableBody>
+    {eventDetails.zones?.map((zone) => (
+      <TableRow key={zone.id}>
+        <TableCell>
+          <div className="flex items-center gap-2">
+            <div className="w-4 h-4 rounded" style={{ backgroundColor: zone.color }} />
+            {zone.name}
+          </div>
+        </TableCell>
+        <TableCell>{zone.type}</TableCell>
+        <TableCell>{zone.seats}</TableCell>
+        <TableCell>${zone.price.toLocaleString()}</TableCell>
+        <TableCell>${zone.tax.toFixed(2)}</TableCell>
+        <TableCell className="font-semibold">${zone.total.toFixed(2)}</TableCell>
+      </TableRow>
+    ))}
+  </TableBody>
+</Table>
+```
+
+### Embedded Map
+
+```javascript
+<TabsContent value="location" className="mt-4">
+  <div className="aspect-w-16 aspect-h-9">
+    <iframe
+      src={eventDetails.mapUrl}
+      width="100%"
+      height="450"
+      style={{ border: 0 }}
+      allowFullScreen=""
+      loading="lazy"
+      referrerPolicy="no-referrer-when-downgrade"
+      title="map event venue"
+    ></iframe>
+  </div>
+</TabsContent>
+```
+
+### Related Events
+
+```javascript
+<div className="mt-8">
+  <h2 className="text-2xl font-semibold text-gray-900 mb-4">Eventos relacionados</h2>
+  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+    {events.slice(0, 3).map((event) => (
+      <Card key={event.event_id}>
+        <CardHeader className="p-0">
+          <img src={event.event_media[0]} alt={event.event_name} 
+               className="w-full h-32 object-cover" />
+        </CardHeader>
+        <CardContent className="p-4">
+          <CardTitle className="text-lg">{event.event_name}</CardTitle>
+          <p className="text-sm text-gray-500 flex items-center mt-2">
+            <Calendar className="mr-2 h-4 w-4" /> {convertTimestamp(event.date_start)}
+          </p>
+        </CardContent>
+        <CardFooter>
+          <Button variant="outline" onClick={() => navigate(`/event/${event.event_id}`)}>
+            Ver detalles
+          </Button>
+        </CardFooter>
+      </Card>
+    ))}
+  </div>
+</div>
+```
+
+---
+
+## Event List View
+
+**Route:** `/events`
+
+### Purpose
+
+Provides a comprehensive, filterable catalog of all available events with search and advanced filtering options.
+
+### State Management
+
+```javascript
+const events = useSelector((state) => state.events.events);
+
+const [filteredEvents, setFilteredEvents] = useState([]);
+const [displayedEvents, setDisplayedEvents] = useState([]);
+const [searchTerm, setSearchTerm] = useState('');
+const [selectedCategory, setSelectedCategory] = useState('Todos');
+const [selectedLocation, setSelectedLocation] = useState('Todas');
+const [selectedMonth, setSelectedMonth] = useState('Todos');
+const [selectedYear, setSelectedYear] = useState('Todos');
+const [showFilters, setShowFilters] = useState(false);
+const [imageLoaded, setImageLoaded] = useState({});
+const [locations, setLocations] = useState(['Todas']);
+const [availableMonths, setAvailableMonths] = useState([]);
+const [availableYears, setAvailableYears] = useState([]);
+const [showMore, setShowMore] = useState(false);
+```
+
+### Categories Configuration
+
+```javascript
+const categories = [
+  { name: "Todos", icon: <Filter className="h-5 w-5" /> },
+  { name: "Concierto", icon: <Music className="h-5 w-5" /> },
+  { name: "Deporte", icon: <Ticket className="h-5 w-5" /> },
+  { name: "Teatro", icon: <Theater className="h-5 w-5" /> },
+  { name: "Infantiles", icon: <Baby className="h-5 w-5" /> },
+  { name: "Conferencias", icon: <Presentation className="h-5 w-5" /> },
+  { name: "Talleres", icon: <Wrench className="h-5 w-5" /> },
+  { name: "Cursos", icon: <GraduationCap className="h-5 w-5" /> },
+  { name: "Ballet", icon: <Sparkles className="h-5 w-5" /> },
+  { name: "Valet Parking", icon: <Car className="h-5 w-5" /> },
+  { name: "Donación", icon: <HandHeart className="h-5 w-5" /> },
+  { name: "Otro", icon: <Users className="h-5 w-5" /> },
+];
+```
+
+### Dynamic Filter Extraction
+
+```javascript
+useEffect(() => {
+  const loadEvents = async () => {
+    dispatch(setLoadingData({ loading: true }));
+
+    const uniqueLocations = ['Todas'];
+    const months = new Set(['Todos']);
+    const years = new Set(['Todos']);
+
+    events.forEach(evento => {
+      if (evento?.venue_name && !uniqueLocations.includes(evento.venue_name)) {
+        uniqueLocations.push(evento.venue_name);
+      }
+
+      if (evento?.date_start) {
+        const dateStr = convertTimestamp(evento.date_start);
+        const date = parseDate(dateStr);
+        months.add(date.getMonth());
+        years.add(date.getFullYear());
+      }
+    });
+
+    setLocations(uniqueLocations);
+    setAvailableMonths([...months].sort());
+    setAvailableYears([...years].sort());
+    
+    // Process and sort events
+    const processedEvents = events.map((evento) => ({
+      id: evento?.event_id,
+      title: evento?.event_name,
+      date: convertTimestamp(evento?.date_start),
+      dateObj: parseDate(convertTimestamp(evento?.date_start)),
+      month: parseDate(convertTimestamp(evento?.date_start)).getMonth(),
+      year: parseDate(convertTimestamp(evento?.date_start)).getFullYear(),
+      location: evento?.venue_name,
+      image: evento.event_media[0] !== '' ? evento.event_media[0] : "https://placehold.co/1200x600/png",
+      genre: evento?.type || 'Otros',
+      description: evento?.event_desc,
+    })).sort((a, b) => a.dateObj - b.dateObj);
+
+    setFilteredEvents(processedEvents);
+    setDisplayedEvents(processedEvents.slice(0, 9));
+    dispatch(setLoadingData({ loading: false }));
+  };
+
+  loadEvents();
+}, [events, dispatch]);
+```
+
+### Search and Filter Logic
+
+```javascript
+useEffect(() => {
+  const filterEvents = () => {
+    let filtered = [...events].map((evento) => ({
+      id: evento?.event_id,
+      title: evento?.event_name,
+      date: convertTimestamp(evento?.date_start),
+      dateObj: parseDate(convertTimestamp(evento?.date_start)),
+      month: parseDate(convertTimestamp(evento?.date_start)).getMonth(),
+      year: parseDate(convertTimestamp(evento?.date_start)).getFullYear(),
+      location: evento?.venue_name,
+      image: evento.event_media[0],
+      genre: evento?.type || 'Otros',
+      description: evento?.event_desc,
+    }));
+
+    // Filter by search term
+    if (searchTerm) {
+      filtered = filtered.filter(
+        event =>
+          event.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          event.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          event.location.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+    }
+
+    // Filter by category
+    if (selectedCategory !== 'Todos') {
+      filtered = filtered.filter(event => event.genre === selectedCategory);
+    }
+
+    // Filter by location
+    if (selectedLocation !== 'Todas') {
+      filtered = filtered.filter(event => event.location === selectedLocation);
+    }
+
+    // Filter by month
+    if (selectedMonth !== 'Todos') {
+      filtered = filtered.filter(event => event.month === Number(selectedMonth));
+    }
+
+    // Filter by year
+    if (selectedYear !== 'Todos') {
+      filtered = filtered.filter(event => event.year === Number(selectedYear));
+    }
+
+    // Always sort by date
+    filtered = filtered.sort((a, b) => a.dateObj - b.dateObj);
+
+    setFilteredEvents(filtered);
+    setDisplayedEvents(filtered.slice(0, 9));
+  };
+
+  filterEvents();
+}, [events, searchTerm, selectedCategory, selectedLocation, selectedMonth, selectedYear]);
+```
+
+### Search Bar UI
+
+```javascript
+<div className="bg-white rounded-xl shadow-md p-4 -mt-10 mb-8">
+  <div className="flex flex-col md:flex-row gap-4">
+    <div className="relative flex-grow">
+      <Search className="absolute left-3 top-2.5 h-5 w-5 text-gray-400" />
+      <Input
+        placeholder="Buscar eventos..."
+        className="pl-10"
+        value={searchTerm}
+        onChange={handleSearch}
+      />
+    </div>
+    <Button variant="outline" onClick={() => setShowFilters(!showFilters)}>
+      <SlidersHorizontal className="h-4 w-4" />
+      Filtros
+      <ChevronDown className={`h-4 w-4 transition-transform ${showFilters ? 'rotate-180' : ''}`} />
+    </Button>
+  </div>
+</div>
+```
+
+### Collapsible Filters Panel
+
+```javascript
+{showFilters && (
+  <div className="mt-4 pt-4 border-t">
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      {/* Categories */}
+      <div>
+        <h3 className="font-medium mb-2">Categorías</h3>
+        <div className="flex flex-wrap gap-2">
+          {categories.map((category) => (
+            <Button
+              key={category.name}
+              variant={selectedCategory === category.name ? "default" : "outline"}
+              onClick={() => handleCategoryChange(category.name)}
+            >
+              {category.icon}
+              {category.name}
+            </Button>
+          ))}
+        </div>
+      </div>
+
+      {/* Locations */}
+      <div>
+        <h3 className="font-medium mb-2">Ubicaciones</h3>
+        <div className="flex flex-wrap gap-2">
+          {locations.map((location) => (
+            <Button
+              key={location}
+              variant={selectedLocation === location ? "default" : "outline"}
+              onClick={() => handleLocationChange(location)}
+            >
+              {location === 'Todas' ? <Filter className="h-5 w-5 mr-1" /> : <MapPin className="h-5 w-5 mr-1" />}
+              {location}
+            </Button>
+          ))}
+        </div>
+      </div>
+
+      {/* Date filters */}
+      <div className="md:col-span-2">
+        <h3 className="font-medium mb-2">Fecha</h3>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <Label htmlFor="month">Mes</Label>
+            <select id="month" value={selectedMonth} onChange={handleMonthChange}>
+              <option value="Todos">Todos los meses</option>
+              {availableMonths.filter(m => m !== 'Todos').map((month) => (
+                <option key={month} value={month}>{monthNames[month]}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <Label htmlFor="year">Año</Label>
+            <select id="year" value={selectedYear} onChange={handleYearChange}>
+              <option value="Todos">Todos los años</option>
+              {availableYears.filter(y => y !== 'Todos').map((year) => (
+                <option key={year} value={year}>{year}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+)}
+```
+
+### Pagination with "Load More"
+
+```javascript
+const handleLoadMore = () => {
+  setDisplayedEvents(filteredEvents.slice(0, displayedEvents.length + 9));
+};
+
+// In render:
+{displayedEvents.length < filteredEvents.length && (
+  <div className="flex justify-center mt-8">
+    <Button variant="outline" onClick={handleLoadMore}>
+      Cargar más eventos
+    </Button>
+  </div>
+)}
+```
+
+### Empty State
+
+```javascript
+{filteredEvents.length === 0 ? (
+  <div className="text-center py-12 bg-white rounded-xl shadow">
+    <h3 className="text-xl font-medium text-gray-600 mb-2">No se encontraron eventos</h3>
+    <p className="text-gray-500">Intenta con otra búsqueda o filtros diferentes</p>
+  </div>
+) : (
+  // Display events grid
+)}
+```
+
+## Navigation Pattern
+
+<Steps>
+  <Step title="View events list">
+    User browses available events
+  </Step>
+  <Step title="Apply filters">
+    Search, category, location, and date filters narrow results
+  </Step>
+  <Step title="Click event card">
+    Navigate to `/event/:id` for details
+  </Step>
+  <Step title="View pricing and zones">
+    User reviews ticket options
+  </Step>
+  <Step title="Purchase tickets">
+    Navigate to `/purchaseOrder/:idEvent`
+  </Step>
+</Steps>
+
+## Related Views
+
+<CardGroup cols={2}>
+  <Card title="Purchase Flow" icon="shopping-cart" href="/views/purchase-flow">
+    Complete ticket purchase process
+  </Card>
+  <Card title="Home" icon="home" href="/views/home">
+    Return to landing page
+  </Card>
+</CardGroup>

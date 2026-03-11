@@ -1,0 +1,323 @@
+---
+title: 'Multi-Tenant Portal System'
+description: 'Learn how TradeMaster loads tenant-specific branding, themes, and configurations from URLs'
+icon: 'building'
+---
+
+## Overview
+
+TradeMaster Transactions Portales implements a sophisticated multi-tenant architecture that allows multiple clients to use the same codebase with completely customized branding, themes, and configurations. Each tenant is identified by their subdomain or domain, and the system automatically loads the appropriate configuration on page load.
+
+## How Multi-Tenancy Works
+
+The multi-tenant system uses a two-step lookup process:
+
+1. **Tenant Resolution**: Extract the domain from the URL and look up the tenant
+2. **Configuration Loading**: Load the tenant's portal configuration and event data
+
+### Tenant Resolution Flow
+
+<Steps>
+  <Step title="Extract Domain from URL">
+    The application parses `window.location.href` to extract the domain name from the URL.
+    
+    ```javascript {24} title="src/App.jsx"
+    const currentUrl = window.location.href;
+    const splitUrl = currentUrl.split('/');
+    
+    // Get the domain (splitUrl[2] contains the domain)
+    const dataPage = await getDoc(doc(db, "portals_tenants", splitUrl[2]));
+    ```
+  </Step>
+
+  <Step title="Look Up Tenant Configuration">
+    Using the extracted domain, the system queries the `portals_tenants` collection in Firestore:
+    
+    ```javascript {5-10} title="src/App.jsx"
+    const dataPage = await getDoc(doc(db, "portals_tenants", splitUrl[2]));
+    
+    if (dataPage.exists()) {
+      const DataPage = dataPage.data();
+      const metadataPage = await getDoc(
+        doc(db, "portals", DataPage?.value)
+      );
+      // Continue with portal setup...
+    }
+    ```
+  </Step>
+
+  <Step title="Load Portal Metadata">
+    Once the tenant is identified, load the full portal configuration from the `portals` collection.
+  </Step>
+
+  <Step title="Apply Branding & Load Events">
+    Apply custom branding (favicon, colors) and load client-specific events.
+  </Step>
+</Steps>
+
+## Full Implementation
+
+### Main Application Logic
+
+The complete multi-tenant initialization happens in `App.jsx`:
+
+```javascript title="src/App.jsx" {18-46}
+import React, { useEffect } from 'react';
+import Router from './routes/router';
+import { useRoutes } from 'react-router';
+import { useDispatch } from 'react-redux';
+import { doc, getDoc } from 'firebase/firestore';
+import { getSetup } from './store/apps/setup/setupSlice';
+import { setEvents } from './store/apps/events/eventsSlices';
+import { fetchSetup } from './store/apps/setup/configDataSlice';
+import { setLoadingData } from './store/apps/loading/loadingSlice';
+import { db, list_events_clients } from './guards/firebase/firebase';
+import ThemeProvider from './components/ThemeProvider';
+
+function App() {
+  const dispatch = useDispatch();
+  const routing = useRoutes(Router);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        dispatch(setLoadingData({ loading: true }));
+        const currentUrl = window.location.href;
+        const splitUrl = currentUrl.split('/');
+
+        // Step 1: Look up tenant by domain
+        const dataPage = await getDoc(
+          doc(db, "portals_tenants", splitUrl[2])
+        );
+
+        if (dataPage.exists()) {
+          const DataPage = dataPage.data();
+          
+          // Step 2: Get full portal configuration
+          const metadataPage = await getDoc(
+            doc(db, "portals", DataPage?.value)
+          );
+
+          // Step 3: Update favicon dynamically
+          let link = document.querySelector("link[rel~='icon']");
+          if (link instanceof HTMLLinkElement) {
+            link.href = metadataPage.data()?.media_favicon;
+          }
+
+          // Step 4: Load client-specific events
+          const resp = await list_events_clients({ 
+            client_id: metadataPage.data()?.client_id 
+          });
+
+          // Step 5: Dispatch configuration to Redux store
+          dispatch(fetchSetup());
+          dispatch(setEvents(
+            resp.data.eventos.filter(event => event.status === 'Activo')
+          ));
+          dispatch(getSetup(metadataPage.data()));
+          dispatch(setLoadingData({ loading: false }));
+        } else {
+          // Invalid tenant - redirect to main site
+          window.location.replace('https://trademastertransactions.com/');
+        }
+      } catch (error) {
+        console.log("🚀 ~ fetchData ~ error:", error)
+      }
+    };
+
+    fetchData();
+  }, []);
+
+  return (
+    <ThemeProvider>
+      <div>
+        {routing}
+      </div>
+    </ThemeProvider>
+  )
+}
+
+export default App
+```
+
+## Custom Branding Features
+
+### Dynamic Favicon Loading
+
+The system automatically updates the browser favicon based on the tenant's configuration:
+
+```javascript title="src/App.jsx:30-33"
+let link = document.querySelector("link[rel~='icon']");
+if (link instanceof HTMLLinkElement) {
+  link.href = metadataPage.data()?.media_favicon;
+}
+```
+
+### Dynamic Theme Colors
+
+The `ThemeProvider` component applies custom primary and secondary colors for each tenant:
+
+```javascript title="src/components/ThemeProvider.jsx" {7-23}
+import { useEffect } from 'react';
+import { useSelector } from 'react-redux';
+
+const ThemeProvider = ({ children }) => {
+  const setup = useSelector((state) => state.setup.Setup.metadata);
+
+  useEffect(() => {
+    if (setup?.color_primary && setup?.color_secondary) {
+      // Update CSS custom properties
+      document.documentElement.style.setProperty(
+        '--color-primary', 
+        setup.color_primary
+      );
+      document.documentElement.style.setProperty(
+        '--color-secondary', 
+        setup.color_secondary
+      );
+      
+      // Convert HEX to HSL for Tailwind
+      const primaryHSL = hexToHSL(setup.color_primary);
+      const secondaryHSL = hexToHSL(setup.color_secondary);
+      
+      document.documentElement.style.setProperty('--primary', primaryHSL);
+      document.documentElement.style.setProperty('--secondary', secondaryHSL);
+    }
+  }, [setup?.color_primary, setup?.color_secondary]);
+
+  return children;
+};
+```
+
+## State Management
+
+Tenant configuration is stored in Redux for global access:
+
+```javascript title="src/store/apps/setup/setupSlice.js"
+import { createSlice } from "@reduxjs/toolkit";
+
+const initialState = {
+  Setup: {},
+};
+
+export const SetupSlice = createSlice({
+  name: 'Setup',
+  initialState,
+  reducers: {
+    getSetup: (state, action) => {
+      state.Setup = action.payload;
+    },
+  },
+});
+
+export const { getSetup } = SetupSlice.actions;
+export default SetupSlice.reducer;
+```
+
+### Accessing Tenant Data
+
+Components can access tenant configuration using Redux selectors:
+
+```javascript
+import { useSelector } from 'react-redux';
+
+const MyComponent = () => {
+  const portal = useSelector((state) => state.setup.Setup);
+  const clientId = portal.client_id;
+  const primaryColor = portal.metadata?.color_primary;
+  
+  // Use tenant-specific data...
+};
+```
+
+## Tenant Isolation
+
+<Note>
+  Each tenant's data is completely isolated. Events, configurations, and branding are loaded based on the `client_id` associated with the portal.
+</Note>
+
+### Event Filtering
+
+Events are filtered to show only those belonging to the current tenant:
+
+```javascript title="src/App.jsx:35-38"
+const resp = await list_events_clients({ 
+  client_id: metadataPage.data()?.client_id 
+});
+
+dispatch(setEvents(
+  resp.data.eventos.filter(event => event.status === 'Activo')
+));
+```
+
+## Error Handling
+
+<Warning>
+  If a tenant is not found (invalid domain), users are automatically redirected to the main TradeMaster website.
+</Warning>
+
+```javascript title="src/App.jsx:41-43"
+if (dataPage.exists()) {
+  // Load tenant configuration
+} else {
+  window.location.replace('https://trademastertransactions.com/');
+}
+```
+
+## Database Structure
+
+### Collections
+
+<Tabs>
+  <Tab title="portals_tenants">
+    Maps domains to portal IDs:
+    
+    ```json
+    {
+      "example.com": {
+        "value": "portal_abc123",
+        "status": true
+      }
+    }
+    ```
+  </Tab>
+  
+  <Tab title="portals">
+    Stores complete portal configurations:
+    
+    ```json
+    {
+      "portal_abc123": {
+        "client_id": "client_xyz",
+        "media_favicon": "https://example.com/favicon.ico",
+        "office_id": "office_001",
+        "metadata": {
+          "color_primary": "#FF6B35",
+          "color_secondary": "#004E89"
+        }
+      }
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## Best Practices
+
+1. **Always validate tenant existence** before proceeding with application logic
+2. **Cache tenant configuration** in Redux to avoid repeated Firestore calls
+3. **Apply branding early** in the component lifecycle to avoid visual flickering
+4. **Use CSS custom properties** for theme colors to enable dynamic styling
+5. **Filter all data by `client_id`** to ensure tenant isolation
+
+## Testing Multi-Tenant Setup
+
+To test the multi-tenant functionality:
+
+1. Set up multiple domains/subdomains pointing to your application
+2. Create entries in `portals_tenants` for each domain
+3. Create portal configurations in `portals` with different branding
+4. Visit each domain and verify:
+   - Correct favicon loads
+   - Theme colors apply correctly
+   - Only tenant-specific events appear
+   - All branding matches the tenant configuration

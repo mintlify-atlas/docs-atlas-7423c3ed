@@ -1,0 +1,185 @@
+---
+title: 'Local Development Setup'
+description: 'Set up your local development environment for TradeMaster Transactions Portales'
+---
+
+This guide walks you through setting up the TradeMaster Transactions Portales application on your local machine.
+
+## Prerequisites
+
+Before you begin, ensure you have the following installed:
+
+- **Node.js** (v18 or higher)
+- **npm** (v10 or higher)
+- **Git**
+- A code editor (VS Code recommended)
+
+## Getting Started
+
+<Steps>
+  <Step title="Clone the Repository">
+    Clone the project repository to your local machine:
+
+    ```bash
+    git clone <repository-url>
+    cd trademastertransactions-portales
+    ```
+  </Step>
+
+  <Step title="Install Dependencies">
+    Install all required packages using npm:
+
+    ```bash
+    npm install
+    ```
+
+    This will install all dependencies listed in `package.json`, including:
+    - **React 18.3.1** - UI framework
+    - **Redux Toolkit 2.2.7** - State management
+    - **React Router 6.26.1** - Navigation
+    - **Firebase 10.13.1** - Backend services
+    - **Stripe** - Payment processing
+    - **Vite 5.4.1** - Build tool
+  </Step>
+
+  <Step title="Configure Environment Variables">
+    Create a `.env.local` file in the root directory with the following variables:
+
+    ```bash
+    # Stripe Configuration
+    VITE_STRIPE_PUBLIC_KEY=pk_test_your_stripe_public_key_here
+    ```
+
+    <Note>
+      Firebase configuration is currently hardcoded in `src/guards/firebase/firebase.js:7-14`. In production, these should be moved to environment variables for security.
+    </Note>
+
+    ### Environment Variables Reference
+
+    | Variable | Description | Required |
+    |----------|-------------|----------|
+    | `VITE_STRIPE_PUBLIC_KEY` | Stripe publishable key for payment processing | Yes |
+
+    <Note>
+      All Vite environment variables must be prefixed with `VITE_` to be exposed to the client-side code.
+    </Note>
+  </Step>
+
+  <Step title="Start Development Server">
+    Run the development server:
+
+    ```bash
+    npm run dev
+    ```
+
+    The application will start at `http://localhost:5173` (default Vite port).
+
+    <Note>
+      Vite provides hot module replacement (HMR), so changes to your code will be reflected immediately without a full page reload.
+    </Note>
+  </Step>
+</Steps>
+
+## Available Scripts
+
+The following npm scripts are available in `package.json:6-10`:
+
+<CodeGroup>
+```bash Development Server
+npm run dev
+```
+
+```bash Production Build
+npm run build
+```
+
+```bash Lint Code
+npm run lint
+```
+
+```bash Preview Production Build
+npm run preview
+```
+</CodeGroup>
+
+### Script Details
+
+- **`npm run dev`** - Starts the Vite development server with hot module replacement
+- **`npm run build`** - Creates an optimized production build in the `dist/` directory
+- **`npm run lint`** - Runs ESLint to check for code quality issues
+- **`npm run preview`** - Locally preview the production build
+
+## Vite Configuration
+
+The project uses Vite as its build tool with custom configuration in `vite.config.js:9-39`:
+
+```javascript
+import { defineConfig } from "vite";
+import react from "@vitejs/plugin-react";
+import svgr from "@svgr/rollup";
+
+export default defineConfig({
+  plugins: [svgr(), react()],
+  resolve: {
+    alias: {
+      "@": fileURLToPath(new URL("./src", import.meta.url)),
+    },
+  },
+  esbuild: {
+    loader: "jsx",
+    include: /src\/.*\.jsx?$/,
+  },
+  // ... optimizeDeps configuration
+});
+```
+
+### Key Features
+
+- **Path Aliases**: `@/` maps to `src/` directory
+- **SVG Support**: SVGR plugin for importing SVGs as React components
+- **JSX in .js Files**: ESBuild configured to treat `.js` files as JSX
+
+## Verification
+
+After setup, verify your installation:
+
+<Steps>
+  <Step title="Check Development Server">
+    Visit `http://localhost:5173` in your browser. You should see the application homepage.
+  </Step>
+
+  <Step title="Check Hot Reload">
+    Make a small change to any component file and save. The changes should appear immediately without a full page reload.
+  </Step>
+
+  <Step title="Check Console">
+    Open browser developer tools and check the console for any errors. A clean startup should show no critical errors.
+  </Step>
+</Steps>
+
+## Troubleshooting
+
+### Port Already in Use
+
+If port 5173 is already in use, Vite will automatically try the next available port (5174, 5175, etc.).
+
+### Module Not Found Errors
+
+If you encounter module errors:
+
+```bash
+rm -rf node_modules package-lock.json
+npm install
+```
+
+### Stripe Configuration Errors
+
+If you see Stripe errors in the console, ensure your `VITE_STRIPE_PUBLIC_KEY` is properly set in `.env.local` (see `src/guards/stripe/stripeConfig.js:5-14`).
+
+## Next Steps
+
+Now that your development environment is ready:
+
+- Learn about the [Project Structure](/development/project-structure)
+- Understand [State Management](/development/state-management) with Redux
+- Explore [Routing and Navigation](/development/routing)

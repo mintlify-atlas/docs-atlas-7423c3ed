@@ -1,0 +1,545 @@
+---
+title: 'State Management'
+description: 'Learn how Redux Toolkit manages application state with persistence and encryption'
+---
+
+TradeMaster Transactions uses Redux Toolkit for centralized state management with redux-persist for state persistence across sessions.
+
+## Store Configuration
+
+The Redux store is configured in `src/store/Store.js` with the following features:
+
+- **Redux Toolkit** for simplified Redux setup
+- **Redux Persist** for localStorage persistence
+- **Encryption support** (currently disabled but available)
+- **Logout handling** that clears sensitive state
+
+### Store Setup
+
+From `src/store/Store.js:59-69`:
+
+```javascript
+export const store = configureStore({
+  reducer: persistedReducer,
+  middleware: (getDefaultMiddleware) =>
+    getDefaultMiddleware({
+      serializableCheck: {
+        ignoredActions: [FLUSH, REHYDRATE, PAUSE, PERSIST, PURGE, REGISTER],
+      },
+    }),
+});
+
+export const persistor = persistStore(store);
+```
+
+### Persistence Configuration
+
+From `src/store/Store.js:25-37`:
+
+```javascript
+const persistConfig = {
+  key: "root",
+  storage,
+  whitelist: ["auth", "loading", "setup", "events", "configData", "emailStatus"],
+  transforms: [
+    // encryptTransform({
+    //   secretKey: 'default_key_test',
+    //   onError: (error) => {
+    //     console.error('Encriptación fallida:', error);
+    //   },
+    // }),
+  ],
+};
+```
+
+**Persisted Slices**:
+- `auth` - User authentication state
+- `loading` - Global loading indicators
+- `setup` - Application setup data
+- `events` - Event listings and details
+- `configData` - Configuration from Firebase
+- `emailStatus` - Email send tracking
+
+<Note>
+  Encryption is available via `redux-persist-transform-encrypt` but currently commented out. Uncomment and configure a secure secret key for production to encrypt sensitive data in localStorage.
+</Note>
+
+## Redux Slices
+
+The application state is divided into feature-based slices located in `src/store/apps/`.
+
+### Auth Slice
+
+**Location**: `src/store/apps/auth/authSlice.js`
+
+**Purpose**: Manages user authentication state
+
+**State Shape**:
+```javascript
+{
+  isAuthenticated: false,
+  isInitialized: false,
+  initialEmail: null,
+  userToComplete: null,
+  user: null
+}
+```
+
+**Actions**:
+
+<CodeGroup>
+```javascript authStateChanged
+import { authStateChanged } from '@/store/apps/auth/authSlice';
+
+// Update authentication state when user logs in/out
+dispatch(authStateChanged({
+  isAuthenticated: true,
+  user: {
+    uid: '123',
+    email: 'user@example.com',
+    displayName: 'John Doe',
+    date: {
+      created: timestamp,
+      updated: timestamp,
+      validated: timestamp
+    }
+  }
+}));
+```
+
+```javascript setInitialEmail
+import { setInitialEmail } from '@/store/apps/auth/authSlice';
+
+// Store email during registration flow
+dispatch(setInitialEmail({ email: 'user@example.com' }));
+```
+
+```javascript setUserToComplete
+import { setUserToComplete } from '@/store/apps/auth/authSlice';
+
+// Store partial user data during registration
+dispatch(setUserToComplete({ user: partialUserData }));
+```
+</CodeGroup>
+
+**Usage Example**:
+```javascript
+import { useSelector } from 'react-redux';
+
+const MyComponent = () => {
+  const isAuthenticated = useSelector((state) => state.auth.isAuthenticated);
+  const user = useSelector((state) => state.auth.user);
+
+  return (
+    <div>
+      {isAuthenticated ? (
+        <p>Welcome, {user.displayName}</p>
+      ) : (
+        <p>Please log in</p>
+      )}
+    </div>
+  );
+};
+```
+
+### Setup Slice
+
+**Location**: `src/store/apps/setup/setupSlice.js`
+
+**Purpose**: Stores application setup and configuration data
+
+**State Shape**:
+```javascript
+{
+  Setup: {}
+}
+```
+
+**Actions**:
+
+```javascript
+import { getSetup } from '@/store/apps/setup/setupSlice';
+
+// Store setup configuration
+dispatch(getSetup({
+  // Configuration object
+}));
+```
+
+### Events Slice
+
+**Location**: `src/store/apps/events/eventsSlices.js`
+
+**Purpose**: Manages event listings and data
+
+**State Shape**:
+```javascript
+{
+  events: []
+}
+```
+
+**Actions**:
+
+```javascript
+import { setEvents } from '@/store/apps/events/eventsSlices';
+
+// Update events list
+dispatch(setEvents([
+  {
+    id: 'event1',
+    title: 'Concert',
+    date: '2024-03-15',
+    // ... other event properties
+  }
+]));
+```
+
+**Usage Example**:
+```javascript
+import { useSelector } from 'react-redux';
+
+const EventList = () => {
+  const events = useSelector((state) => state.events.events);
+
+  return (
+    <div>
+      {events.map(event => (
+        <div key={event.id}>{event.title}</div>
+      ))}
+    </div>
+  );
+};
+```
+
+### Loading Slice
+
+**Location**: `src/store/apps/loading/loadingSlice.js`
+
+**Purpose**: Global loading state for async operations
+
+**State Shape**:
+```javascript
+{
+  loading: false
+}
+```
+
+**Actions**:
+
+<CodeGroup>
+```javascript setLoadingData
+import { setLoadingData } from '@/store/apps/loading/loadingSlice';
+
+// Show loading indicator
+dispatch(setLoadingData({ loading: true }));
+
+// Hide loading indicator
+dispatch(setLoadingData({ loading: false }));
+```
+
+```javascript resetLoadingData
+import { resetLoadingData } from '@/store/apps/loading/loadingSlice';
+
+// Reset to default (false)
+dispatch(resetLoadingData());
+```
+</CodeGroup>
+
+**Usage Example**:
+```javascript
+import { useSelector, useDispatch } from 'react-redux';
+import { setLoadingData } from '@/store/apps/loading/loadingSlice';
+
+const MyComponent = () => {
+  const loading = useSelector((state) => state.loading.loading);
+  const dispatch = useDispatch();
+
+  const fetchData = async () => {
+    dispatch(setLoadingData({ loading: true }));
+    try {
+      // Fetch data
+    } finally {
+      dispatch(setLoadingData({ loading: false }));
+    }
+  };
+
+  return loading ? <Spinner /> : <Content />;
+};
+```
+
+### Config Data Slice
+
+**Location**: `src/store/apps/setup/configDataSlice.js`
+
+**Purpose**: Stores configuration data from Firebase, including exchange rates and payment types
+
+**State Shape**:
+```javascript
+{
+  config_data: {}
+}
+```
+
+**Actions**:
+
+```javascript
+import { getSetup } from '@/store/apps/setup/configDataSlice';
+
+// Store configuration data
+dispatch(getSetup({
+  exchange_rates: {
+    USD: 1.0,
+    VES: 36.5,
+    date: { last_update: timestamp }
+  },
+  payment_data: [
+    {
+      id: 'stripe',
+      name: 'Credit Card',
+      enabled: true,
+      date: { created: timestamp, updated: timestamp }
+    }
+  ]
+}));
+```
+
+**Async Thunk** (`src/store/apps/setup/configDataSlice.js:24-57`):
+
+```javascript
+import { fetchSetup } from '@/store/apps/setup/configDataSlice';
+
+// Fetch configuration from Firebase
+dispatch(fetchSetup());
+```
+
+This thunk:
+1. Fetches data from Firebase `data` collection
+2. Fetches payment types from `data/payment_types/payment_data` subcollection
+3. Converts Firebase timestamps to readable dates
+4. Combines and dispatches the data
+
+### Email Status Slice
+
+**Location**: `src/store/apps/emailStatus/emailStatusSlice.js`
+
+**Purpose**: Tracks which order confirmation emails have been sent to prevent duplicates
+
+**State Shape**:
+```javascript
+{
+  sentEmails: {
+    'order_id_1': true,
+    'order_id_2': true
+  }
+}
+```
+
+**Actions**:
+
+<CodeGroup>
+```javascript setEmailSent
+import { setEmailSent } from '@/store/apps/emailStatus/emailStatusSlice';
+
+// Mark email as sent for an order
+dispatch(setEmailSent({ orderId: 'order_123' }));
+```
+
+```javascript clearEmailStatus
+import { clearEmailStatus } from '@/store/apps/emailStatus/emailStatusSlice';
+
+// Clear all email status (e.g., on logout)
+dispatch(clearEmailStatus());
+```
+</CodeGroup>
+
+**Usage Example**:
+```javascript
+import { useSelector, useDispatch } from 'react-redux';
+import { setEmailSent } from '@/store/apps/emailStatus/emailStatusSlice';
+
+const OrderConfirmation = ({ orderId }) => {
+  const sentEmails = useSelector((state) => state.emailStatus.sentEmails);
+  const dispatch = useDispatch();
+
+  const sendConfirmationEmail = async () => {
+    if (!sentEmails[orderId]) {
+      await sendEmail(orderId);
+      dispatch(setEmailSent({ orderId }));
+    }
+  };
+
+  return <button onClick={sendConfirmationEmail}>Send Email</button>;
+};
+```
+
+## Root Reducer and Logout
+
+The root reducer includes special handling for logout (`src/store/Store.js:48-55`):
+
+```javascript
+const rootReducer = (state, action) => {
+  if (action.type === LOGOUT) {
+    storage.removeItem('persist:root');
+    const { setup, events, configData } = state || {};
+    state = { setup, events, configData };
+  }
+  return appReducer(state, action);
+};
+```
+
+**Logout Action** (`src/store/Store.js:71`):
+
+```javascript
+import { logout } from '@/store/Store';
+import { useDispatch } from 'react-redux';
+
+const LogoutButton = () => {
+  const dispatch = useDispatch();
+
+  const handleLogout = () => {
+    dispatch(logout());
+    // This will:
+    // 1. Clear persisted state from localStorage
+    // 2. Reset auth and user data
+    // 3. Preserve setup, events, and configData
+  };
+
+  return <button onClick={handleLogout}>Logout</button>;
+};
+```
+
+<Note>
+  On logout, the store preserves `setup`, `events`, and `configData` so these don't need to be re-fetched. Only user-specific state (`auth`, `loading`, `emailStatus`) is cleared.
+</Note>
+
+## Redux Hooks
+
+### useSelector
+
+Read state from the Redux store:
+
+```javascript
+import { useSelector } from 'react-redux';
+
+const user = useSelector((state) => state.auth.user);
+const loading = useSelector((state) => state.loading.loading);
+const events = useSelector((state) => state.events.events);
+```
+
+### useDispatch
+
+Dispatch actions to update state:
+
+```javascript
+import { useDispatch } from 'react-redux';
+import { setLoadingData } from '@/store/apps/loading/loadingSlice';
+
+const dispatch = useDispatch();
+dispatch(setLoadingData({ loading: true }));
+```
+
+## Best Practices
+
+<Note>
+**State Organization**
+- Keep slices focused on a single domain
+- Use normalized state shape for entities
+- Avoid deeply nested state structures
+</Note>
+
+<Note>
+**Performance**
+- Use memoized selectors for derived state (consider `reselect`)
+- Select only the data you need in components
+- Avoid selecting large objects unnecessarily
+</Note>
+
+<Note>
+**Async Operations**
+- Use Redux Toolkit's `createAsyncThunk` for async logic
+- Handle loading, success, and error states
+- Show loading indicators during async operations
+</Note>
+
+<Note>
+**Security**
+- Enable encryption for sensitive data in production
+- Never store passwords or tokens in Redux
+- Use secure secret keys for encryption
+- Clear sensitive state on logout
+</Note>
+
+## Common Patterns
+
+### Fetching Data on Mount
+
+```javascript
+import { useEffect } from 'react';
+import { useDispatch, useSelector } from 'react-redux';
+import { fetchSetup } from '@/store/apps/setup/configDataSlice';
+
+const App = () => {
+  const dispatch = useDispatch();
+  const configData = useSelector((state) => state.configData.config_data);
+
+  useEffect(() => {
+    if (Object.keys(configData).length === 0) {
+      dispatch(fetchSetup());
+    }
+  }, [dispatch, configData]);
+
+  return <div>App Content</div>;
+};
+```
+
+### Loading State Pattern
+
+```javascript
+import { useDispatch } from 'react-redux';
+import { setLoadingData } from '@/store/apps/loading/loadingSlice';
+
+const fetchData = async () => {
+  dispatch(setLoadingData({ loading: true }));
+  
+  try {
+    const data = await api.fetchData();
+    dispatch(setData(data));
+  } catch (error) {
+    console.error(error);
+  } finally {
+    dispatch(setLoadingData({ loading: false }));
+  }
+};
+```
+
+### Conditional Rendering Based on Auth
+
+```javascript
+import { useSelector } from 'react-redux';
+
+const ProfileButton = () => {
+  const isAuthenticated = useSelector((state) => state.auth.isAuthenticated);
+  const user = useSelector((state) => state.auth.user);
+
+  if (!isAuthenticated) {
+    return <Link to="/auth/login">Login</Link>;
+  }
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger>{user.displayName}</DropdownMenuTrigger>
+      <DropdownMenuContent>
+        <DropdownMenuItem>Profile</DropdownMenuItem>
+        <DropdownMenuItem>Logout</DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+};
+```
+
+## Next Steps
+
+- Learn about [Routing and Navigation](/development/routing)
+- Explore [Project Structure](/development/project-structure)
+- Review [Local Setup](/development/local-setup)

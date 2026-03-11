@@ -1,0 +1,502 @@
+---
+title: 'Ticket Purchasing Flow'
+description: 'Complete ticket purchasing workflow with seat selection, locking, and cart management'
+icon: 'ticket'
+---
+
+## Overview
+
+The ticket purchasing system implements a comprehensive flow that includes seat selection (both assigned and free assignment), ticket locking to prevent double-booking, cart management, and a timed checkout process.
+
+## Purchase Flow Architecture
+
+<Steps>
+  <Step title="Seat Selection">
+    Users select seats from available zones (assigned seats or free assignment)
+  </Step>
+  
+  <Step title="Ticket Locking">
+    Selected tickets are locked using Firebase Cloud Functions to prevent other users from purchasing them
+  </Step>
+  
+  <Step title="Cart Management">
+    Selected seats are added to a shopping cart with real-time updates
+  </Step>
+  
+  <Step title="Checkout Timer">
+    A 10-minute countdown timer starts to complete the purchase
+  </Step>
+  
+  <Step title="Payment Processing">
+    User completes payment using one of the available payment methods
+  </Step>
+  
+  <Step title="Order Confirmation">
+    Order is created and tickets are permanently assigned to the user
+  </Step>
+</Steps>
+
+## Seat Types
+
+TradeMaster supports two types of seat assignment:
+
+### Assigned Seats
+
+Specific seat numbers that users select individually:
+
+```javascript title="src/views/purchaseOrder/PurchaseOrder.js:361-392"
+const generateSeats = (zone, tickets) => {
+  if (zone.type === "Libre Asignación") {
+    // Handle free assignment (see below)
+  }
+
+  // Sort tickets by seat number
+  const sortedTickets = tickets.sort((a, b) => {
+    const numA = parseInt(a.seat_id.match(/\d+/)[0], 10);
+    const numB = parseInt(b.seat_id.match(/\d+/)[0], 10);
+    return numA - numB;
+  });
+
+  const filterOffline = sortedTickets.filter((x) => 
+    x.status_offline !== true
+  );
+
+  return {
+    type: "Asignado",
+    seats: filterOffline.map((ticket) => ({
+      id: ticket.seat_id,
+      ticket_id: ticket.ticket_id,
+      price: zone.price,
+      status: ticket.status === true ? 'available' : 'unavailable',
+      status_offline: ticket.status_offline,
+      location: zone.name,
+      name: zone.name,
+      metadata: ''
+    }))
+  };
+};
+```
+
+### Free Assignment (Libre Asignación)
+
+Users select a quantity, and specific seats are assigned automatically:
+
+```javascript title="src/views/purchaseOrder/PurchaseOrder.js:361-370"
+if (zone.type === "Libre Asignación") {
+  const availableTickets = tickets.filter(
+    t => t.status === true && t.status_offline !== true
+  );
+  
+  return {
+    type: "Libre Asignación",
+    availableSeats: availableTickets.length,
+    price: zone.price,
+    selectedCount: 0,
+    tickets: availableTickets
+  };
+}
+```
+
+## Seat Selection UI
+
+### Assigned Seat Grid
+
+```javascript title="src/views/purchaseOrder/PurchaseOrder.js:463-482"
+{section?.type === "Asignado" ? (
+  <div className="grid grid-cols-10 justify-center gap-2 mb-4">
+    {section?.seats.map((seat) => (
+      <Button
+        key={seat.id}
+        variant={selectedSeats.some(s => s.id === seat.id) ? "default" : "outline"}
+        size="sm"
+        onClick={() => toggleSeatSelection(seat)}
+        className={`w-10 h-10 ${
+          seat.status === 'unavailable'
+            ? "bg-gray-300 cursor-not-allowed"
+            : selectedSeats.some(s => s.id === seat.id)
+            ? "bg-primary text-white"
+            : "hover:bg-primary/10"
+        }`}
+        disabled={seat.status === 'unavailable'}
+      >
+        {seat.id}
+      </Button>
+    ))}
+  </div>
+) : (
+  // Free assignment UI...
+)}
+```
+
+### Free Assignment Selector
+
+```javascript title="src/views/purchaseOrder/PurchaseOrder.js:484-506"
+<div className="space-y-4">
+  <div className="flex items-center justify-between">
+    <span>Cantidad de asientos:</span>
+    <Input
+      type="number"
+      min="1"
+      max={section?.availableSeats}
+      value={section?.selectedCount || 0}
+      onChange={(e) => handleFreeAssignmentSelection(
+        sectionKey, 
+        parseInt(e.target.value)
+      )}
+      className="w-20"
+    />
+  </div>
+  <div className="text-sm text-gray-500">
+    Asientos disponibles: {section?.availableSeats}
+  </div>
+  <Button
+    onClick={() => addFreeAssignmentSeatsToCart(sectionKey)}
+    disabled={!section?.selectedCount}
+  >
+    Agregar al carrito
+  </Button>
+</div>
+```
+
+## Ticket Locking System
+
+<Warning>
+  Tickets must be locked to prevent double-booking during the checkout process.
+</Warning>
+
+### Loading Available Tickets
+
+Fetch real-time ticket availability from Firebase:
+
+```javascript title="src/views/purchaseOrder/PurchaseOrder.js:318-338"
+const searchSeatsData = async () => {
+  try {
+    dispatch(setLoadingData({ loading: true }));
+    
+    // Get zone configuration
+    const querySnapshot = await getDoc(
+      doc(db, `/events/${params.idEvent}/setup`, 'zones')
+    );
+    
+    // Get real-time ticket availability
+    const getTickets = await tickets_list_event_sales_virtual({ 
+      event_id: params.idEvent 
+    });
+
+    const filterZones = querySnapshot.data().zone.filter(
+      (x) => x.public === true && x.status === true
+    );
+
+    const seatData = {};
+    filterZones.forEach((zone) => {
+      const filterTicketsZone = getTickets?.data.response.filter(
+        (x) => x.zone === zone.name
+      );
+      let seats = generateSeats(zone, filterTicketsZone)
+      seatData[zone.name] = seats;
+    });
+
+    setSeatSections(seatData);
+    dispatch(setLoadingData({ loading: false }));
+  } catch (error) {
+    console.log("🚀 ~ searchSeatsData ~ error:", error)
+  }
+};
+```
+
+### Locking Tickets via Firebase Function
+
+When users proceed to checkout, tickets are locked:
+
+```javascript title="Firebase Cloud Function Call"
+import { tickets_lock_virtual } from '../../guards/firebase/firebase';
+
+// Lock selected tickets
+const lockTickets = async (ticketIds) => {
+  try {
+    const response = await tickets_lock_virtual({
+      ticket_ids: ticketIds,
+      user_id: userId,
+      event_id: eventId,
+      lock_duration: 600 // 10 minutes in seconds
+    });
+    
+    if (response.data.success) {
+      // Proceed to payment
+      setCheckoutStep("payment");
+    }
+  } catch (error) {
+    console.error("Error locking tickets:", error);
+  }
+};
+```
+
+### Unlocking Tickets
+
+Tickets are unlocked if the user cancels or the timer expires:
+
+```javascript title="Unlock Function"
+import { tickets_unlock_param_virtual } from '../../guards/firebase/firebase';
+
+const ticketsUnlock = async () => {
+  try {
+    const ticketIds = selectedSeats.map(seat => seat.ticket_id);
+    
+    await tickets_unlock_param_virtual({
+      ticket_ids: ticketIds,
+      user_id: userId,
+      event_id: eventId
+    });
+    
+    // Return to event list or seat selection
+    navigate('/events');
+  } catch (error) {
+    console.error("Error unlocking tickets:", error);
+  }
+};
+```
+
+## Cart Management
+
+### Adding Seats to Cart
+
+```javascript title="src/views/purchaseOrder/PurchaseOrder.js:229-236"
+const toggleSeatSelection = (seat) => {
+  if (seat.status === 'unavailable') return;
+  
+  setSelectedSeats(prev =>
+    prev.some(s => s.id === seat.id)
+      ? prev.filter(s => s.id !== seat.id)
+      : [...prev, seat]
+  );
+};
+```
+
+### Removing Seats from Cart
+
+```javascript title="src/views/purchaseOrder/PurchaseOrder.js:238-258"
+const removeSeat = (seatId) => {
+  const seatToRemove = selectedSeats.find(seat => seat.id === seatId);
+  
+  if (seatToRemove) {
+    setSelectedSeats(prev => prev.filter(seat => seat.id !== seatId));
+
+    // If free assignment, update available count
+    if (seatToRemove.metadata === 'Libre Asignación') {
+      const sectionKey = seatToRemove.location;
+      setSeatSections(prev => ({
+        ...prev,
+        [sectionKey]: {
+          ...prev[sectionKey],
+          availableSeats: prev[sectionKey].availableSeats + 1
+        }
+      }));
+      setFreeAssignmentCount(prev => ({
+        ...prev,
+        [sectionKey]: prev[sectionKey] - 1
+      }));
+    }
+  }
+};
+```
+
+### Cart Display
+
+```javascript title="Cart Summary Component"
+<Card>
+  <CardHeader>
+    <CardTitle>Tu Carrito</CardTitle>
+  </CardHeader>
+  <CardContent>
+    {selectedSeats.length === 0 ? (
+      <p className="text-gray-500">No hay asientos seleccionados</p>
+    ) : (
+      <ScrollArea className="h-64">
+        {selectedSeats.map((seat) => (
+          <div key={seat.id} className="flex justify-between items-center py-2">
+            <div>
+              <p className="font-medium">{seat.name}</p>
+              <p className="text-sm text-gray-500">Asiento: {seat.id}</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="font-semibold">${seat.price}</span>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => removeSeat(seat.id)}
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        ))}
+      </ScrollArea>
+    )}
+  </CardContent>
+  <CardFooter className="flex-col gap-2">
+    <Separator />
+    <div className="flex justify-between w-full font-bold text-lg">
+      <span>Total:</span>
+      <span>${totalAmount.toFixed(2)}</span>
+    </div>
+    <Button 
+      className="w-full" 
+      onClick={handleCheckout}
+      disabled={selectedSeats.length === 0}
+    >
+      Proceder al Pago
+    </Button>
+  </CardFooter>
+</Card>
+```
+
+## Checkout Timer
+
+A 10-minute countdown timer ensures users complete their purchase:
+
+```javascript title="src/views/purchaseOrder/PurchaseOrder.js:108-267"
+const [timeLeft, setTimeLeft] = useState(600); // 10 minutes = 600 seconds
+const [showTimeoutModal, setShowTimeoutModal] = useState(false);
+
+useEffect(() => {
+  if (checkoutStep === "payment" && timeLeft > 0) {
+    const timer = setTimeout(() => setTimeLeft(timeLeft - 1), 1000)
+    return () => clearTimeout(timer)
+  } else if (checkoutStep === "payment" && timeLeft === 0) {
+    setShowTimeoutModal(true)
+  }
+}, [checkoutStep, timeLeft])
+
+const formatTime = (seconds) => {
+  const minutes = Math.floor(seconds / 60)
+  const remainingSeconds = seconds % 60
+  return `${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`
+};
+```
+
+### Timer Display
+
+```javascript title="Timer UI Component"
+{checkoutStep === "payment" && (
+  <div className="flex items-center gap-2 text-red-600 font-semibold">
+    <Clock className="h-5 w-5" />
+    <span>Tiempo restante: {formatTime(timeLeft)}</span>
+  </div>
+)}
+```
+
+### Timeout Handling
+
+```javascript title="src/views/purchaseOrder/PurchaseOrder.js:401-405"
+const handleTimeoutModalClose = (newOpen) => {
+  if (newOpen === false) return
+  setShowTimeoutModal(false)
+  ticketsUnlock(); // Release locked tickets
+};
+```
+
+<Note>
+  When the timer expires, locked tickets are automatically released and the user is redirected back to the event list.
+</Note>
+
+## Free Assignment Implementation
+
+### Selecting Quantity
+
+```javascript title="src/views/purchaseOrder/PurchaseOrder.js:407-418"
+const handleFreeAssignmentSelection = (sectionKey, count) => {
+  const section = seatSections[sectionKey];
+  const totalSelectedSeats = selectedSeats.filter(
+    seat => seat.location === sectionKey && 
+            seat.metadata === 'Libre Asignación'
+  ).length;
+  const maxAvailable = section.tickets.length - totalSelectedSeats;
+
+  setSeatSections(prev => ({
+    ...prev,
+    [sectionKey]: {
+      ...prev[sectionKey],
+      selectedCount: Math.min(count, maxAvailable)
+    }
+  }));
+};
+```
+
+### Adding to Cart
+
+```javascript title="src/views/purchaseOrder/PurchaseOrder.js:421-455"
+const addFreeAssignmentSeatsToCart = (sectionKey) => {
+  const section = seatSections[sectionKey];
+  const currentCount = freeAssignmentCount[sectionKey] || 0;
+  const availableTickets = section.tickets.slice(
+    currentCount, 
+    currentCount + section.selectedCount
+  );
+
+  if (availableTickets.length < section.selectedCount) {
+    toast.error(`No hay suficientes asientos disponibles en ${sectionKey}.`);
+    return;
+  }
+
+  const newSeats = availableTickets.map((ticket) => ({
+    id: ticket.seat_id,
+    ticket_id: ticket.ticket_id,
+    price: section.price,
+    status: 'available',
+    location: sectionKey,
+    name: sectionKey,
+    metadata: 'Libre Asignación'
+  }));
+
+  setSelectedSeats(prev => [...prev, ...newSeats]);
+  
+  setFreeAssignmentCount(prev => ({
+    ...prev,
+    [sectionKey]: (prev[sectionKey] || 0) + section.selectedCount
+  }));
+
+  setSeatSections(prev => ({
+    ...prev,
+    [sectionKey]: {
+      ...prev[sectionKey],
+      selectedCount: 0,
+      availableSeats: prev[sectionKey].availableSeats - section.selectedCount
+    }
+  }));
+};
+```
+
+## Gift Purchases
+
+Users can purchase tickets as gifts for someone else:
+
+```javascript title="Gift Purchase Feature"
+const [isGiftPurchase, setIsGiftPurchase] = useState(false);
+const [recipientInfo, setRecipientInfo] = useState({
+  name: "",
+  email: "",
+  phone: "",
+  id: "",
+  id_type: null
+});
+
+const isRecipientInfoValid = () => {
+  if (!isGiftPurchase) return true;
+  return recipientInfo.name !== "" && 
+         recipientInfo.email !== "" && 
+         recipientInfo.phone !== "" && 
+         recipientInfo.id !== "" && 
+         recipientInfo.id_type;
+};
+```
+
+## Best Practices
+
+1. **Always lock tickets** before proceeding to payment to prevent double-booking
+2. **Implement a timeout** to release locked tickets if payment isn't completed
+3. **Show real-time availability** to ensure users see accurate seat counts
+4. **Support both seat types** - assigned seats and free assignment for flexibility
+5. **Validate cart state** before allowing checkout to proceed
+6. **Handle errors gracefully** - unlock tickets if any error occurs during checkout
+7. **Provide clear feedback** - show loading states, success messages, and error notifications
+8. **Calculate totals accurately** - include taxes and service fees in the displayed price

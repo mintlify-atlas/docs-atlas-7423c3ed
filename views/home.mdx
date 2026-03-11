@@ -1,0 +1,300 @@
+---
+title: 'Home View'
+description: 'Landing page with event carousel, featured events showcase, and category navigation'
+---
+
+## Overview
+
+The Home view (`src/views/home/Home.js`) serves as the main landing page for the TradeMaster Transactions Portal. It displays an auto-rotating event carousel, featured upcoming events in a grid layout, and popular events sections.
+
+**Route:** `/`
+
+## Component Structure
+
+### Main Features
+
+<CardGroup cols={2}>
+  <Card title="Event Carousel" icon="images">
+    Auto-rotating carousel showcasing event banners with navigation controls
+  </Card>
+  <Card title="Featured Events Grid" icon="grid">
+    Grid display of upcoming events with filtering tabs
+  </Card>
+  <Card title="Popular Events" icon="star">
+    Horizontal list of trending events
+  </Card>
+  <Card title="Promotional Banner" icon="bullhorn">
+    Call-to-action for event organizers
+  </Card>
+</CardGroup>
+
+## State Management
+
+### Redux Integration
+
+```javascript
+const events = useSelector((state) => state.events.events);
+```
+
+Retrieves all events from the Redux store for display across the homepage.
+
+### Local State
+
+```javascript
+const [carouselItems, setCarouselItems] = useState([]);
+const [featuredEvents, setFeaturedEvents] = useState([]);
+const [imageLoaded, setImageLoaded] = useState({});
+```
+
+- **carouselItems**: Events formatted for carousel display
+- **featuredEvents**: Events sorted by date for grid display
+- **imageLoaded**: Tracks image loading state per event
+
+## Data Processing
+
+### Event Sorting
+
+Events are automatically sorted by date from nearest to farthest:
+
+```javascript
+const parseDate = (dateString) => {
+  const [day, month, year] = dateString.split('/').map(Number);
+  return new Date(year, month - 1, day);
+};
+
+const carouselItems = events.map((evento, i) => {
+  return {
+    id: i,
+    image: evento.event_media[0] !== '' ? evento.event_media[0] : "https://placehold.co/1200x600/png",
+    event_id: evento?.event_id,
+    title: evento?.event_name,
+    date: convertTimestamp(evento?.date_start),
+  }
+}).sort((a, b) => parseDate(a.date) - parseDate(b.date));
+```
+
+## Carousel Component
+
+### Auto-Rotation Logic
+
+```javascript
+const Carousel = ({ items }) => {
+  const [currentIndex, setCurrentIndex] = useState(0)
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      nextSlide()
+    }, 10000)  // Auto-advance every 10 seconds
+    return () => clearInterval(timer)
+  }, [])
+
+  return (
+    <div className="relative overflow-hidden rounded-lg h-[600px]">
+      <div
+        className="flex transition-transform duration-500 ease-in-out h-full"
+        style={{ transform: `translateX(-${currentIndex * 100}%)` }}
+      >
+        {items.map((item) => (
+          <div key={item.id} className="w-full flex-shrink-0 relative cursor-pointer" 
+               onClick={() => { navigate(`event/${item.event_id}`) }}>
+            <img src={item.image} alt={item.title} className="w-full h-full object-cover" />
+            <div className="absolute inset-0 bg-gradient-to-r from-black/70 to-transparent" />
+          </div>
+        ))}
+      </div>
+      {/* Navigation buttons and indicators */}
+    </div>
+  )
+};
+```
+
+### Features
+- Auto-rotation every 10 seconds
+- Manual navigation with prev/next buttons
+- Click-to-navigate to event details
+- Visual indicators for current slide
+- Smooth CSS transitions
+
+## Featured Events Section
+
+### Tabs Implementation
+
+```javascript
+<Tabs defaultValue="upcoming" className="mt-8">
+  <TabsList className="bg-white rounded-xl shadow-md">
+    <TabsTrigger value="upcoming">Próximos</TabsTrigger>
+  </TabsList>
+  <TabsContent value="upcoming" className="mt-4">
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      {featuredEvents.slice(0, 6).map((event) => (
+        <Card key={event.id} className="overflow-hidden flex flex-col rounded-xl">
+          {/* Event card content */}
+        </Card>
+      ))}
+    </div>
+  </TabsContent>
+</Tabs>
+```
+
+### Event Card Structure
+
+```javascript
+<Card key={event.id} className="overflow-hidden flex flex-col rounded-xl">
+  <CardHeader className="p-0 cursor-pointer h-48 relative" 
+              onClick={() => navigate(`event/${event.event_id}`)}>
+    <img
+      src={event.image}
+      alt={event.title}
+      className={`w-full h-full object-cover !mt-0 transition-opacity duration-300 
+                  ${imageLoaded[event.id] ? 'opacity-100' : 'opacity-0'}`}
+      onLoad={() => handleImageLoad(event.id)}
+    />
+  </CardHeader>
+  <CardContent className="pt-4 flex-1">
+    <CardTitle className="text-lg h-6 overflow-hidden">{event.title}</CardTitle>
+    <p className="text-sm text-gray-500 flex items-center mt-2">
+      <Calendar className="mr-2 h-4 w-4" />
+      {event.date}
+    </p>
+    <div className="text-sm text-gray-500 flex items-center mt-1">
+      <Music className="mr-2 h-4 w-4" />
+      {event.type}
+    </div>
+    <div className="text-sm text-gray-500 flex items-center mt-1">
+      <MapPin className="mr-2 h-4 w-4" />
+      {event.location}
+    </div>
+  </CardContent>
+  <CardFooter className="mt-auto">
+    <Button className="w-full bg-primary hover:bg-primary/90 text-white"
+            onClick={() => navigate(`event/${event.event_id}`)}>
+      Comprar entradas
+    </Button>
+  </CardFooter>
+</Card>
+```
+
+## Popular Events Section
+
+```javascript
+<div className="bg-white rounded-xl shadow-xl p-6 mt-8">
+  <h2 className="text-2xl font-semibold text-gray-900 mb-4">Eventos populares</h2>
+  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+    {featuredEvents.slice(0, 3).map((event) => (
+      <div key={event.id} className="flex items-center space-x-4">
+        <img onClick={() => { navigate(`event/${event.event_id}`) }} 
+             src={event.image} 
+             alt={event.title} 
+             className="w-16 h-16 object-cover rounded-lg cursor-pointer" />
+        <div>
+          <h3 className="font-semibold cursor-pointer" 
+              onClick={() => { navigate(`event/${event.event_id}`) }}>
+            {event.title}
+          </h3>
+          <p className="text-sm text-gray-500">{event.date}</p>
+        </div>
+      </div>
+    ))}
+  </div>
+</div>
+```
+
+## Promotional Banner
+
+```javascript
+<div className="bg-gradient-to-r from-primary to-secondary rounded-xl shadow-xl p-6 text-white mt-8">
+  <h2 className="text-2xl font-semibold mb-4">¿Organizas eventos?</h2>
+  <p className="mb-4">Únete a nuestra plataforma y llega a más personas con tus eventos.</p>
+  <Button className="bg-primary h-10 hover:bg-primary/90 text-white px-4">
+    Más información
+  </Button>
+</div>
+```
+
+## Image Loading Pattern
+
+### Progressive Image Loading
+
+```javascript
+const handleImageLoad = (id) => {
+  setImageLoaded(prev => ({ ...prev, [id]: true }))
+}
+
+// In render:
+<div className="absolute inset-0 flex items-center justify-center">
+  {!imageLoaded[event.id] && <span className="text-gray-400">Cargando...</span>}
+</div>
+<img
+  src={event.image}
+  alt={event.title}
+  className={`transition-opacity duration-300 ${imageLoaded[event.id] ? 'opacity-100' : 'opacity-0'}`}
+  onLoad={() => handleImageLoad(event.id)}
+/>
+```
+
+**Benefits:**
+- Smooth loading transitions
+- Loading indicators for better UX
+- Prevents layout shifts
+
+## Navigation Flow
+
+<Steps>
+  <Step title="User lands on homepage">
+    Events are loaded from Redux store
+  </Step>
+  <Step title="Events are sorted by date">
+    Both carousel and grid items are sorted chronologically
+  </Step>
+  <Step title="User clicks event">
+    Navigation to `/event/:id` route
+  </Step>
+  <Step title="Purchase flow begins">
+    User can proceed to ticket purchase from event detail
+  </Step>
+</Steps>
+
+## Loading States
+
+```javascript
+const getEventsClient = async () => {
+  dispatch(setLoadingData({ loading: true }));
+  
+  // Process events...
+  
+  setCarouselItems(carouselItems);
+  setFeaturedEvents(featuredEvents);
+  dispatch(setLoadingData({ loading: false }));
+};
+```
+
+## UI Components Used
+
+- **Lucide Icons**: Calendar, ChevronLeft, ChevronRight, MapPin, Music, Theater, Ticket, Users
+- **Custom UI Components**: Button, Card, CardContent, CardFooter, CardHeader, CardTitle, Tabs
+- **Layout**: Responsive grid with Tailwind CSS
+
+## Responsive Design
+
+```javascript
+// Grid adapts to screen size
+<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+  {/* Events */}
+</div>
+
+// Carousel height
+<div className="relative overflow-hidden rounded-lg h-[600px]">
+  {/* Carousel content */}
+</div>
+```
+
+## Related Views
+
+<CardGroup cols={2}>
+  <Card title="Event Detail" icon="ticket" href="/views/events">
+    View individual event information
+  </Card>
+  <Card title="Event List" icon="list" href="/views/events">
+    Browse all available events
+  </Card>
+</CardGroup>

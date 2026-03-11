@@ -1,0 +1,741 @@
+---
+title: Table & Data Display Components
+description: Table, Card, Avatar, Alert, and Accordion components for displaying data
+---
+
+## Table
+
+A semantic table component for displaying tabular data.
+
+### Import
+
+```javascript
+import {
+  Table,
+  TableHeader,
+  TableBody,
+  TableFooter,
+  TableHead,
+  TableRow,
+  TableCell,
+  TableCaption,
+} from "@/components/ui/Table"
+```
+
+### Component Architecture
+
+- `Table` - Root table wrapper with overflow handling
+- `TableHeader` - Table header section (`<thead>`)
+- `TableBody` - Table body section (`<tbody>`)
+- `TableFooter` - Table footer section (`<tfoot>`)
+- `TableHead` - Header cell (`<th>`)
+- `TableRow` - Table row (`<tr>`)
+- `TableCell` - Table cell (`<td>`)
+- `TableCaption` - Table caption
+
+### Component Source (Key Parts)
+
+```javascript
+import * as React from "react"
+import { cn } from "../../utils/cn";
+
+const Table = React.forwardRef(({ className, ...props }, ref) => (
+  <div className="relative w-full overflow-auto">
+    <table
+      ref={ref}
+      className={cn("w-full caption-bottom text-sm", className)}
+      {...props}
+    />
+  </div>
+))
+
+const TableRow = React.forwardRef(({ className, ...props }, ref) => (
+  <tr
+    ref={ref}
+    className={cn(
+      "border-b transition-colors hover:bg-muted/50 data-[state=selected]:bg-muted",
+      className
+    )}
+    {...props}
+  />
+))
+```
+
+### Usage
+
+<Tabs>
+  <Tab title="Basic">
+    ```jsx
+    <Table>
+      <TableCaption>Recent Transactions</TableCaption>
+      <TableHeader>
+        <TableRow>
+          <TableHead>ID</TableHead>
+          <TableHead>Description</TableHead>
+          <TableHead>Amount</TableHead>
+          <TableHead>Status</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        <TableRow>
+          <TableCell>TXN-001</TableCell>
+          <TableCell>Payment received</TableCell>
+          <TableCell>$1,200.00</TableCell>
+          <TableCell>Approved</TableCell>
+        </TableRow>
+        <TableRow>
+          <TableCell>TXN-002</TableCell>
+          <TableCell>Wire transfer</TableCell>
+          <TableCell>$850.00</TableCell>
+          <TableCell>Pending</TableCell>
+        </TableRow>
+      </TableBody>
+    </Table>
+    ```
+  </Tab>
+  <Tab title="With Footer">
+    ```jsx
+    <Table>
+      <TableHeader>
+        <TableRow>
+          <TableHead>Item</TableHead>
+          <TableHead>Quantity</TableHead>
+          <TableHead className="text-right">Amount</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        <TableRow>
+          <TableCell>Transaction Fees</TableCell>
+          <TableCell>12</TableCell>
+          <TableCell className="text-right">$24.00</TableCell>
+        </TableRow>
+        <TableRow>
+          <TableCell>Processing Fees</TableCell>
+          <TableCell>5</TableCell>
+          <TableCell className="text-right">$15.00</TableCell>
+        </TableRow>
+      </TableBody>
+      <TableFooter>
+        <TableRow>
+          <TableCell colSpan={2}>Total</TableCell>
+          <TableCell className="text-right">$39.00</TableCell>
+        </TableRow>
+      </TableFooter>
+    </Table>
+    ```
+  </Tab>
+  <Tab title="Selectable Rows">
+    ```jsx
+    const [selected, setSelected] = useState([])
+
+    <Table>
+      <TableHeader>
+        <TableRow>
+          <TableHead className="w-12">
+            <input type="checkbox" />
+          </TableHead>
+          <TableHead>Transaction</TableHead>
+          <TableHead>Amount</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {transactions.map((tx) => (
+          <TableRow 
+            key={tx.id}
+            data-state={selected.includes(tx.id) ? "selected" : undefined}
+          >
+            <TableCell>
+              <input 
+                type="checkbox" 
+                checked={selected.includes(tx.id)}
+                onChange={() => {
+                  setSelected(prev => 
+                    prev.includes(tx.id) 
+                      ? prev.filter(id => id !== tx.id)
+                      : [...prev, tx.id]
+                  )
+                }}
+              />
+            </TableCell>
+            <TableCell>{tx.description}</TableCell>
+            <TableCell>${tx.amount}</TableCell>
+          </TableRow>
+        ))}
+      </TableBody>
+    </Table>
+    ```
+  </Tab>
+  <Tab title="With Actions">
+    ```jsx
+    <Table>
+      <TableHeader>
+        <TableRow>
+          <TableHead>ID</TableHead>
+          <TableHead>Description</TableHead>
+          <TableHead>Status</TableHead>
+          <TableHead className="text-right">Actions</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {transactions.map((tx) => (
+          <TableRow key={tx.id}>
+            <TableCell className="font-medium">{tx.id}</TableCell>
+            <TableCell>{tx.description}</TableCell>
+            <TableCell>{tx.status}</TableCell>
+            <TableCell className="text-right">
+              <Button variant="ghost" size="sm">View</Button>
+              <Button variant="ghost" size="sm">Edit</Button>
+            </TableCell>
+          </TableRow>
+        ))}
+      </TableBody>
+    </Table>
+    ```
+  </Tab>
+</Tabs>
+
+### Features
+
+- **Overflow handling** - Horizontal scroll for wide tables
+- **Hover states** - Row highlighting on hover
+- **Selection support** - `data-state="selected"` attribute
+- **Responsive** - Automatic overflow scrolling
+- **Semantic HTML** - Proper table elements
+
+---
+
+## Card
+
+A versatile card component for content containers.
+
+### Import
+
+```javascript
+import {
+  Card,
+  CardHeader,
+  CardFooter,
+  CardTitle,
+  CardDescription,
+  CardContent,
+} from "@/components/ui/Card"
+```
+
+### Component Source
+
+```javascript
+import * as React from "react"
+import { cn } from "../../utils/cn"
+
+const Card = React.forwardRef(({ className, ...props }, ref) => (
+  <div
+    ref={ref}
+    className={cn(
+      "rounded-xl border bg-card text-card-foreground shadow",
+      className
+    )}
+    {...props}
+  />
+))
+
+const CardHeader = React.forwardRef(({ className, ...props }, ref) => (
+  <div
+    ref={ref}
+    className={cn("flex flex-col space-y-1.5 p-6", className)}
+    {...props}
+  />
+))
+
+const CardTitle = React.forwardRef(({ className, ...props }, ref) => (
+  <h3
+    ref={ref}
+    className={cn("font-semibold leading-none tracking-tight", className)}
+    {...props}
+  />
+))
+
+const CardContent = React.forwardRef(({ className, ...props }, ref) => (
+  <div ref={ref} className={cn("p-6 pt-0", className)} {...props} />
+))
+```
+
+### Usage
+
+<Tabs>
+  <Tab title="Basic">
+    ```jsx
+    <Card>
+      <CardHeader>
+        <CardTitle>Transaction Summary</CardTitle>
+        <CardDescription>Overview of recent activity</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <p>Total transactions: 124</p>
+        <p>Total volume: $45,230</p>
+      </CardContent>
+    </Card>
+    ```
+  </Tab>
+  <Tab title="With Footer">
+    ```jsx
+    <Card>
+      <CardHeader>
+        <CardTitle>Pending Approval</CardTitle>
+        <CardDescription>Transaction requires your approval</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="space-y-2">
+          <div className="flex justify-between">
+            <span>Amount:</span>
+            <span className="font-bold">$2,500.00</span>
+          </div>
+          <div className="flex justify-between">
+            <span>Account:</span>
+            <span>****1234</span>
+          </div>
+        </div>
+      </CardContent>
+      <CardFooter className="gap-2">
+        <Button variant="outline" className="flex-1">Reject</Button>
+        <Button className="flex-1">Approve</Button>
+      </CardFooter>
+    </Card>
+    ```
+  </Tab>
+  <Tab title="Grid Layout">
+    ```jsx
+    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+      <Card>
+        <CardHeader>
+          <CardTitle>Total Revenue</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-3xl font-bold">$45,231</p>
+          <p className="text-sm text-muted-foreground">+20% from last month</p>
+        </CardContent>
+      </Card>
+      
+      <Card>
+        <CardHeader>
+          <CardTitle>Active Users</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-3xl font-bold">2,345</p>
+          <p className="text-sm text-muted-foreground">+15% from last month</p>
+        </CardContent>
+      </Card>
+      
+      <Card>
+        <CardHeader>
+          <CardTitle>Transactions</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-3xl font-bold">1,234</p>
+          <p className="text-sm text-muted-foreground">+12% from last month</p>
+        </CardContent>
+      </Card>
+    </div>
+    ```
+  </Tab>
+  <Tab title="Interactive">
+    ```jsx
+    <Card className="cursor-pointer transition-colors hover:bg-muted/50">
+      <CardHeader>
+        <CardTitle>View Details</CardTitle>
+        <CardDescription>Click to see transaction details</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <p>Transaction ID: TXN-12345</p>
+      </CardContent>
+    </Card>
+    ```
+  </Tab>
+</Tabs>
+
+---
+
+## Avatar
+
+An avatar component for displaying user images with fallbacks.
+
+### Import
+
+```javascript
+import {
+  Avatar,
+  AvatarImage,
+  AvatarFallback,
+} from "@/components/ui/Avatar"
+```
+
+### Component Source
+
+```javascript
+import * as React from "react"
+import * as AvatarPrimitive from "@radix-ui/react-avatar"
+import { cn } from "../../utils/cn";
+
+const Avatar = React.forwardRef(({ className, ...props }, ref) => (
+  <AvatarPrimitive.Root
+    ref={ref}
+    className={cn(
+      "relative flex h-10 w-10 shrink-0 overflow-hidden rounded-full",
+      className
+    )}
+    {...props}
+  />
+))
+
+const AvatarImage = React.forwardRef(({ className, ...props }, ref) => (
+  <AvatarPrimitive.Image
+    ref={ref}
+    className={cn("aspect-square h-full w-full", className)}
+    {...props}
+  />
+))
+
+const AvatarFallback = React.forwardRef(({ className, ...props }, ref) => (
+  <AvatarPrimitive.Fallback
+    ref={ref}
+    className={cn(
+      "flex h-full w-full items-center justify-center rounded-full bg-muted",
+      className
+    )}
+    {...props}
+  />
+))
+```
+
+### Usage
+
+<Tabs>
+  <Tab title="With Image">
+    ```jsx
+    <Avatar>
+      <AvatarImage src="https://github.com/shadcn.png" alt="@shadcn" />
+      <AvatarFallback>CN</AvatarFallback>
+    </Avatar>
+    ```
+  </Tab>
+  <Tab title="With Fallback">
+    ```jsx
+    <Avatar>
+      <AvatarImage src="/invalid-url.png" alt="User" />
+      <AvatarFallback>JD</AvatarFallback>
+    </Avatar>
+    ```
+  </Tab>
+  <Tab title="Different Sizes">
+    ```jsx
+    <div className="flex items-center gap-4">
+      <Avatar className="h-8 w-8">
+        <AvatarImage src="/user.png" />
+        <AvatarFallback>SM</AvatarFallback>
+      </Avatar>
+      
+      <Avatar className="h-10 w-10">
+        <AvatarImage src="/user.png" />
+        <AvatarFallback>MD</AvatarFallback>
+      </Avatar>
+      
+      <Avatar className="h-16 w-16">
+        <AvatarImage src="/user.png" />
+        <AvatarFallback>LG</AvatarFallback>
+      </Avatar>
+    </div>
+    ```
+  </Tab>
+  <Tab title="In List">
+    ```jsx
+    <div className="space-y-4">
+      {users.map((user) => (
+        <div key={user.id} className="flex items-center gap-4">
+          <Avatar>
+            <AvatarImage src={user.avatar} />
+            <AvatarFallback>{user.initials}</AvatarFallback>
+          </Avatar>
+          <div>
+            <p className="font-medium">{user.name}</p>
+            <p className="text-sm text-muted-foreground">{user.email}</p>
+          </div>
+        </div>
+      ))}
+    </div>
+    ```
+  </Tab>
+</Tabs>
+
+---
+
+## Alert
+
+An alert component for displaying important messages.
+
+### Import
+
+```javascript
+import {
+  Alert,
+  AlertTitle,
+  AlertDescription,
+} from "@/components/ui/Alert"
+```
+
+### Component Source
+
+```javascript
+import * as React from "react"
+import { cva } from "class-variance-authority"
+import { cn } from "../../utils/cn";
+
+const alertVariants = cva(
+  "relative w-full rounded-lg border px-4 py-3 text-sm [&>svg+div]:translate-y-[-3px] [&>svg]:absolute [&>svg]:left-4 [&>svg]:top-4 [&>svg]:text-foreground [&>svg~*]:pl-7",
+  {
+    variants: {
+      variant: {
+        default: "bg-background text-foreground",
+        destructive:
+          "border-destructive/50 text-destructive dark:border-destructive [&>svg]:text-destructive",
+      },
+    },
+    defaultVariants: {
+      variant: "default",
+    },
+  }
+)
+```
+
+### Usage
+
+<Tabs>
+  <Tab title="Default">
+    ```jsx
+    import { AlertCircle } from "lucide-react"
+
+    <Alert>
+      <AlertCircle className="h-4 w-4" />
+      <AlertTitle>Note</AlertTitle>
+      <AlertDescription>
+        This transaction is pending approval.
+      </AlertDescription>
+    </Alert>
+    ```
+  </Tab>
+  <Tab title="Destructive">
+    ```jsx
+    import { AlertTriangle } from "lucide-react"
+
+    <Alert variant="destructive">
+      <AlertTriangle className="h-4 w-4" />
+      <AlertTitle>Error</AlertTitle>
+      <AlertDescription>
+        Transaction failed. Please try again.
+      </AlertDescription>
+    </Alert>
+    ```
+  </Tab>
+  <Tab title="Without Icon">
+    ```jsx
+    <Alert>
+      <AlertTitle>System Update</AlertTitle>
+      <AlertDescription>
+        The system will be under maintenance tonight from 2am-4am EST.
+      </AlertDescription>
+    </Alert>
+    ```
+  </Tab>
+</Tabs>
+
+---
+
+## Accordion
+
+An accordion component for collapsible content sections.
+
+### Import
+
+```javascript
+import {
+  Accordion,
+  AccordionItem,
+  AccordionTrigger,
+  AccordionContent,
+} from "@/components/ui/Accordion"
+```
+
+### Component Source (Key Parts)
+
+```javascript
+import * as React from "react"
+import * as AccordionPrimitive from "@radix-ui/react-accordion"
+import { ChevronDown } from "lucide-react"
+import { cn } from "../../utils/cn";
+
+const Accordion = AccordionPrimitive.Root
+
+const AccordionTrigger = React.forwardRef(({ className, children, ...props }, ref) => (
+  <AccordionPrimitive.Header className="flex">
+    <AccordionPrimitive.Trigger
+      ref={ref}
+      className={cn(
+        "flex flex-1 items-center justify-between py-4 font-medium transition-all hover:underline [&[data-state=open]>svg]:rotate-180",
+        className
+      )}
+      {...props}
+    >
+      {children}
+      <ChevronDown className="h-4 w-4 shrink-0 transition-transform duration-200" />
+    </AccordionPrimitive.Trigger>
+  </AccordionPrimitive.Header>
+))
+```
+
+### Usage
+
+<Tabs>
+  <Tab title="Single">
+    ```jsx
+    <Accordion type="single" collapsible className="w-full">
+      <AccordionItem value="item-1">
+        <AccordionTrigger>What is a wire transfer?</AccordionTrigger>
+        <AccordionContent>
+          A wire transfer is an electronic transfer of funds between banks.
+        </AccordionContent>
+      </AccordionItem>
+      <AccordionItem value="item-2">
+        <AccordionTrigger>How long does processing take?</AccordionTrigger>
+        <AccordionContent>
+          Most transactions are processed within 24-48 hours.
+        </AccordionContent>
+      </AccordionItem>
+    </Accordion>
+    ```
+  </Tab>
+  <Tab title="Multiple">
+    ```jsx
+    <Accordion type="multiple" className="w-full">
+      <AccordionItem value="fees">
+        <AccordionTrigger>Transaction Fees</AccordionTrigger>
+        <AccordionContent>
+          <div className="space-y-2">
+            <p>Domestic: $2.50 per transaction</p>
+            <p>International: $15.00 per transaction</p>
+          </div>
+        </AccordionContent>
+      </AccordionItem>
+      <AccordionItem value="limits">
+        <AccordionTrigger>Transaction Limits</AccordionTrigger>
+        <AccordionContent>
+          <div className="space-y-2">
+            <p>Daily limit: $10,000</p>
+            <p>Monthly limit: $50,000</p>
+          </div>
+        </AccordionContent>
+      </AccordionItem>
+    </Accordion>
+    ```
+  </Tab>
+  <Tab title="FAQ">
+    ```jsx
+    <Accordion type="single" collapsible className="w-full">
+      {faqs.map((faq, index) => (
+        <AccordionItem key={index} value={`item-${index}`}>
+          <AccordionTrigger>{faq.question}</AccordionTrigger>
+          <AccordionContent>{faq.answer}</AccordionContent>
+        </AccordionItem>
+      ))}
+    </Accordion>
+    ```
+  </Tab>
+</Tabs>
+
+### Features
+
+- **Single or Multiple** - Allow one or multiple items open
+- **Collapsible** - Can close all items in single mode
+- **Animations** - Smooth expand/collapse transitions
+- **Icon rotation** - Chevron rotates when open
+- **Keyboard support** - Arrow keys navigate items
+- **Accessibility** - Full ARIA support
+
+### Props
+
+#### Accordion (Root)
+
+- `type` - `"single"` or `"multiple"`
+- `collapsible` - Allow closing all items (single mode only)
+- `defaultValue` - Initial open item(s)
+- `value` - Controlled open item(s)
+- `onValueChange` - Callback when selection changes
+
+## Complete Example
+
+```jsx
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardContent,
+} from "@/components/ui/Card"
+import {
+  Table,
+  TableHeader,
+  TableBody,
+  TableHead,
+  TableRow,
+  TableCell,
+} from "@/components/ui/Table"
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/Avatar"
+import { Alert, AlertTitle, AlertDescription } from "@/components/ui/Alert"
+import { AlertCircle } from "lucide-react"
+
+function TransactionList({ transactions }) {
+  return (
+    <div className="space-y-4">
+      <Alert>
+        <AlertCircle className="h-4 w-4" />
+        <AlertTitle>Pending Approvals</AlertTitle>
+        <AlertDescription>
+          You have {transactions.filter(t => t.status === 'pending').length} transactions awaiting approval.
+        </AlertDescription>
+      </Alert>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Recent Transactions</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>User</TableHead>
+                <TableHead>Description</TableHead>
+                <TableHead>Amount</TableHead>
+                <TableHead>Status</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {transactions.map((tx) => (
+                <TableRow key={tx.id}>
+                  <TableCell>
+                    <div className="flex items-center gap-2">
+                      <Avatar className="h-8 w-8">
+                        <AvatarImage src={tx.user.avatar} />
+                        <AvatarFallback>{tx.user.initials}</AvatarFallback>
+                      </Avatar>
+                      <span>{tx.user.name}</span>
+                    </div>
+                  </TableCell>
+                  <TableCell>{tx.description}</TableCell>
+                  <TableCell>${tx.amount}</TableCell>
+                  <TableCell>{tx.status}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
+```

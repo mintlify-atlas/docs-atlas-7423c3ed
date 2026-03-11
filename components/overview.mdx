@@ -1,0 +1,267 @@
+---
+title: UI Components Overview
+description: Modern UI component library built with Radix UI and Tailwind CSS
+---
+
+## Overview
+
+TradeMaster's UI component library provides a comprehensive set of accessible, customizable components built on top of Radix UI primitives and styled with Tailwind CSS.
+
+## Technology Stack
+
+### Radix UI
+
+All components are built using [Radix UI](https://www.radix-ui.com/) primitives, which provide:
+
+- **Accessibility**: WAI-ARIA compliant components out of the box
+- **Unstyled**: Full control over component styling
+- **Composable**: Flexible component composition patterns
+- **Type-safe**: Complete TypeScript support
+
+### Tailwind CSS
+
+Components use Tailwind utility classes for styling:
+
+- **Utility-first**: Compose styles directly in JSX
+- **Responsive**: Built-in responsive design utilities
+- **Customizable**: Theme tokens for colors, spacing, and typography
+- **Dark mode**: Automatic dark mode support
+
+### Class Variance Authority
+
+Many components use [class-variance-authority](https://cva.style/docs) (CVA) for variant management:
+
+```javascript
+import { cva } from "class-variance-authority"
+
+const buttonVariants = cva(
+  "base-classes",
+  {
+    variants: {
+      variant: {
+        default: "variant-classes",
+        destructive: "destructive-classes",
+      },
+      size: {
+        default: "h-9 px-4 py-2",
+        sm: "h-8 rounded-md px-3 text-xs",
+      },
+    },
+    defaultVariants: {
+      variant: "default",
+      size: "default",
+    },
+  }
+)
+```
+
+## Component Patterns
+
+### Forwarding Refs
+
+All components use `React.forwardRef` to expose underlying DOM elements:
+
+```javascript
+const Input = React.forwardRef(
+  ({ className, type, ...props }, ref) => {
+    return (
+      <input
+        type={type}
+        className={cn("base-classes", className)}
+        ref={ref}
+        {...props}
+      />
+    )
+  }
+)
+Input.displayName = "Input"
+```
+
+### Class Name Merging
+
+The `cn` utility merges Tailwind classes correctly:
+
+```javascript
+import { cn } from "../../utils/cn"
+
+// Merges classes and handles conflicts
+className={cn("default-classes", className)}
+```
+
+### Radix Primitive Wrapping
+
+Components wrap Radix primitives with custom styling:
+
+```javascript
+import * as LabelPrimitive from "@radix-ui/react-label"
+
+const Label = React.forwardRef(({ className, ...props }, ref) => (
+  <LabelPrimitive.Root
+    ref={ref}
+    className={cn(labelVariants(), className)}
+    {...props}
+  />
+))
+```
+
+## Theming
+
+### CSS Variables
+
+Components use CSS custom properties for theming:
+
+```css
+:root {
+  --background: 0 0% 100%;
+  --foreground: 222.2 84% 4.9%;
+  --primary: 221.2 83.2% 53.3%;
+  --primary-foreground: 210 40% 98%;
+  --muted: 210 40% 96.1%;
+  --muted-foreground: 215.4 16.3% 46.9%;
+  --border: 214.3 31.8% 91.4%;
+  --ring: 221.2 83.2% 53.3%;
+}
+```
+
+### Tailwind Configuration
+
+Colors reference CSS variables:
+
+```javascript
+theme: {
+  extend: {
+    colors: {
+      background: "hsl(var(--background))",
+      foreground: "hsl(var(--foreground))",
+      primary: {
+        DEFAULT: "hsl(var(--primary))",
+        foreground: "hsl(var(--primary-foreground))",
+      },
+    },
+  },
+}
+```
+
+## Accessibility Features
+
+### Keyboard Navigation
+
+- All interactive components support keyboard navigation
+- Focus management handled by Radix UI primitives
+- Custom focus-visible styles via Tailwind
+
+### Screen Reader Support
+
+- ARIA labels and descriptions
+- Semantic HTML elements
+- Hidden elements for screen readers only (`.sr-only`)
+
+### Focus Indicators
+
+```javascript
+focus-visible:outline-none 
+focus-visible:ring-2 
+focus-visible:ring-ring 
+focus-visible:ring-offset-2
+```
+
+## Component Categories
+
+### Form Components
+
+Input, Label, Select, Switch, Slider - see [Forms documentation](/components/forms)
+
+### Dialog Components
+
+Dialog, Sheet - see [Dialogs documentation](/components/dialogs)
+
+### Navigation Components
+
+DropdownMenu, Tabs, ScrollArea - see [Navigation documentation](/components/navigation)
+
+### Data Display
+
+Table, Card, Avatar, Alert, Accordion - see [Tables documentation](/components/tables)
+
+## Usage Example
+
+Here's a complete example combining multiple components:
+
+```jsx
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/Card"
+import { Label } from "@/components/ui/Label"
+import { Input } from "@/components/ui/Input"
+import { Button } from "@/components/ui/Button"
+
+function LoginForm() {
+  return (
+    <Card className="w-96">
+      <CardHeader>
+        <CardTitle>Login</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="email">Email</Label>
+            <Input id="email" type="email" placeholder="[email protected]" />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="password">Password</Label>
+            <Input id="password" type="password" />
+          </div>
+          <Button className="w-full">Sign In</Button>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+```
+
+## Best Practices
+
+### Customization
+
+Always pass custom classes via the `className` prop:
+
+```jsx
+<Button className="w-full mt-4">Submit</Button>
+```
+
+### Variants
+
+Use variant props for component variations:
+
+```jsx
+<Button variant="destructive" size="lg">Delete</Button>
+```
+
+### Composition
+
+Compose complex components from primitives:
+
+```jsx
+<Dialog>
+  <DialogTrigger asChild>
+    <Button>Open Dialog</Button>
+  </DialogTrigger>
+  <DialogContent>
+    <DialogHeader>
+      <DialogTitle>Dialog Title</DialogTitle>
+    </DialogHeader>
+  </DialogContent>
+</Dialog>
+```
+
+### Type Safety
+
+All components support TypeScript with proper type inference:
+
+```typescript
+interface FormProps {
+  onSubmit: (data: FormData) => void
+}
+
+const Form: React.FC<FormProps> = ({ onSubmit }) => {
+  // Component implementation
+}
+```

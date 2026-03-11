@@ -1,0 +1,575 @@
+---
+title: 'User Authentication'
+description: 'Firebase-based authentication with email verification, protected routes, and auth guards'
+icon: 'shield'
+---
+
+## Overview
+
+TradeMaster uses Firebase Authentication for secure user management with email/password authentication, protected routes, and automatic session management. The system implements authentication guards to control access to different parts of the application.
+
+## Firebase Configuration
+
+Authentication is configured in the Firebase initialization file:
+
+```javascript title="src/guards/firebase/firebase.js" {1-21}
+import { initializeApp } from "firebase/app";
+import { getAuth } from "firebase/auth";
+import { getStorage } from "firebase/storage";
+import { initializeFirestore } from "firebase/firestore";
+import { getFunctions, httpsCallable } from "firebase/functions";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyD1bPm1YvtQKwAyXNUxE--YbkbEwydCuCI",
+  authDomain: "trademastertransaction-project.firebaseapp.com",
+  projectId: "trademastertransaction-project",
+  storageBucket: "trademastertransaction-project.appspot.com",
+  messagingSenderId: "324510208107",
+  appId: "1:324510208107:web:63af97fd7bea1f9e93212e"
+};
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const storage = getStorage(app);
+const db = initializeFirestore(app, {
+  experimentalForceLongPolling: true,
+});
+
+export { auth, db, storage, app };
+```
+
+## Authentication Flow
+
+### Registration
+
+New users register with email and password:
+
+<Steps>
+  <Step title="Validate Form Data">
+    Use Yup schema validation to ensure all required fields are present:
+    
+    ```javascript title="src/views/auth/register/Register.js:32-45"
+    const RegisterSchema = Yup.object().shape({
+      name: Yup.string().required("Se requiere nombre"),
+      lastname: Yup.string().required("Se requiere apellido"),
+      email: Yup.string()
+        .email("El correo electrónico no es válido")
+        .required("Se requiere correo electrónico"),
+      country: Yup.object()
+        .typeError('Selecciona un país')
+        .required('Se requiere país del usuario'),
+      phone: Yup.string()
+        .required("Se requiere teléfono")
+        .test('isValidTel', 'El número de teléfono no es válido', 
+          (value) => matchIsValidTel(value)),
+      identification_type: Yup.object()
+        .typeError('Selecciona un tipo de documento')
+        .required('Se requiere el tipo de documento'),
+      id: Yup.string().required("Se requiere número de identificación"),
+      password: Yup.string()
+        .min(6, "La contraseña debe tener al menos 6 caracteres.")
+        .required("Se requiere contraseña"),
+      genre: Yup.object()
+        .typeError('Selecciona un género')
+        .required('Se requiere género'),
+      terms: Yup.boolean()
+        .oneOf([true], 'Debes aceptar los términos y condiciones'),
+    });
+    ```
+  </Step>
+  
+  <Step title="Create Firebase User">
+    Create the user account in Firebase Auth:
+    
+    ```javascript title="src/views/auth/register/Register.js:121-126"
+    const userRegister = await createUserWithEmailAndPassword(
+      auth,
+      values.email.trim().toLowerCase(),
+      values.password.trim()
+    );
+    const userUid = userRegister.user.uid;
+    ```
+  </Step>
+  
+  <Step title="Store User Profile">
+    Save additional user data to Firestore:
+    
+    ```javascript title="src/views/auth/register/Register.js:127-147"
+    const finalData = {
+      account_validated: false,
+      address: {
+        country: values.country,
+        state: values.state
+      },
+      date: {
+        created: serverTimestamp(),
+        updated: '',
+        validated: ''
+      },
+      email: values.email,
+      genre: values.genre,
+      id: values.id,
+      id_type: values.identification_type.value,
+      name: `${values.name} ${values.lastname}`.trim(),
+      phone: values.phone,
+      status: true,
+      uid: userUid
+    };
+    
+    await setDoc(doc(db, "u_users", userUid), finalData);
+    ```
+  </Step>
+  
+  <Step title="Show Success & Navigate">
+    Display success message and redirect to login:
+    
+    ```javascript title="src/views/auth/register/Register.js:148-158"
+    toast.success("Registro exitoso.", {
+      position: "bottom-center",
+      autoClose: 7000,
+      theme: "light",
+    });
+    navigate('/auth/login');
+    ```
+  </Step>
+</Steps>
+
+### Login
+
+Existing users sign in with email and password:
+
+```javascript title="src/views/auth/login/Login.js:44-108"
+onSubmit: async (values, { setStatus, setSubmitting }) => {
+  try {
+    setSubmit(true);
+    
+    // Step 1: Sign in with Firebase
+    const userCredential = await signInWithEmailAndPassword(
+      auth,
+      values.email,
+      values.password
+    );
+
+    const userUid = userCredential.user.uid;
+
+    // Step 2: Fetch user data from Firestore
+    const querySnapshot = await getDoc(doc(db, "u_users", userUid));
+
+    // Step 3: Check if user is active
+    if (querySnapshot.data()?.status !== true) {
+      await signOut(auth);
+      setSubmit(false);
+      
+      dispatch(authStateChanged({
+        isAuthenticated: false,
+        user: null,
+      }));
+    } else {
+      // Step 4: Update Redux state with user data
+      dispatch(authStateChanged({
+        isAuthenticated: true,
+        user: {
+          id: userUid,
+          email: querySnapshot.data()?.email,
+          name: querySnapshot.data()?.name,
+          ...querySnapshot.data(),
+        },
+      }));
+      
+      dispatch(setInitialEmail({
+        email: null,
+      }));
+    }
+  } catch (error) {
+    toast.error(getErrorMessage(error.code), {
+      position: "bottom-center",
+      autoClose: 7000,
+      theme: "light",
+    });
+    setSubmitting(false);
+    setSubmit(false);
+  }
+}
+```
+
+### Error Handling
+
+Provide user-friendly error messages:
+
+```javascript title="src/views/auth/login/Login.js:112-125"
+const getErrorMessage = (errorCode) => {
+  switch (errorCode) {
+    case "auth/invalid-email":
+      return "La dirección de correo electrónico no es válida.";
+    case "auth/invalid-login-credentials":
+      return "La contraseña es incorrecta.";
+    case "auth/invalid-credential":
+      return "La contraseña o el correo electrónico son incorrectos.";
+    case "auth/too-many-requests":
+      return "Has realizado muchas solicitudes, espera un momento.";
+    default:
+      return "Se produjo un error al intentar iniciar sesión.";
+  }
+};
+```
+
+## Authentication Guards
+
+Route protection is implemented using guard components:
+
+### AuthGuard (Protected Routes)
+
+Ensures only authenticated users can access protected routes:
+
+```javascript title="src/guards/authGuard/AuthGuard.js"
+import { useEffect } from 'react';
+import { useSelector } from 'react-redux';
+import { useNavigate, useLocation } from 'react-router-dom';
+
+const AuthGuard = ({ children }) => {
+  const isAuthenticated = useSelector((state) => state.auth.isAuthenticated);
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  useEffect(() => {
+    if (!isAuthenticated) {
+      // Save current URL to return after login
+      const currentUrl = location.pathname + location.search;
+      sessionStorage.setItem('returnUrl', currentUrl);
+      navigate('/auth/checkEmail', { replace: true });
+    }
+  }, [isAuthenticated, location, navigate]);
+
+  return children;
+};
+
+export default AuthGuard;
+```
+
+### GuestGuard (Auth Pages)
+
+Redirects authenticated users away from login/register pages:
+
+```javascript title="src/guards/authGuard/GuestGuard.js"
+import { useEffect } from 'react';
+import { useSelector } from 'react-redux';
+import { useNavigate } from 'react-router-dom';
+
+const GuestGuard = ({ children }) => {
+  const isAuthenticated = useSelector((state) => state.auth.isAuthenticated);
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      // Read the returnUrl from sessionStorage
+      const returnUrl = sessionStorage.getItem('returnUrl');
+
+      // Redirect to saved URL or home
+      const destination = returnUrl || '/';
+
+      // Clear the returnUrl
+      if (returnUrl) {
+        sessionStorage.removeItem('returnUrl');
+      }
+
+      navigate(destination, { replace: true });
+    }
+  }, [isAuthenticated, navigate]);
+
+  return children;
+};
+
+export default GuestGuard;
+```
+
+## Route Configuration
+
+Routes are configured with guards in the router:
+
+```javascript title="src/routes/router.js" {41-75}
+import AuthGuard from "../guards/authGuard/AuthGuard";
+import GuestGuard from "../guards/authGuard/GuestGuard";
+
+const Router = [
+  {
+    path: "/",
+    element: <FullLayout />,
+    children: [
+      { path: "/", element: <Home /> },
+      { path: "/event/:id", element: <Event /> },
+      { path: "/events", element: <EventList /> },
+      { path: "/contacto", element: <Contact /> },
+    ],
+  },
+  {
+    // Protected route - requires authentication
+    path: "/purchaseOrder",
+    element: (
+      <AuthGuard>
+        <FullLayout />
+      </AuthGuard>
+    ),
+    children: [
+      { path: "/purchaseOrder", element: <Navigate to="/" /> },
+      { path: "/purchaseOrder/:idEvent", element: <PurchaseOrder /> },
+    ],
+  },
+  {
+    // Protected route - requires authentication
+    path: "/purchaseSuccess",
+    element: (
+      <AuthGuard>
+        <FullLayout />
+      </AuthGuard>
+    ),
+    children: [
+      { path: "/purchaseSuccess", element: <Navigate to="/" /> },
+      { path: "/purchaseSuccess/:idEvent/:idOrder", element: <PurchaseSuccess /> },
+    ],
+  },
+  {
+    // Protected route - requires authentication
+    path: "/profileUser",
+    element: (
+      <AuthGuard>
+        <FullLayout />
+      </AuthGuard>
+    ),
+    children: [
+      { path: "/profileUser", element: <ProfileUser /> },
+    ]
+  },
+  {
+    // Auth pages - only for guests
+    path: "/auth",
+    element: (
+      <GuestGuard>
+        <BlankLayout />
+      </GuestGuard>
+    ),
+    children: [
+      { path: "/auth/checkEmail", element: <EmailCheck /> },
+      { path: "/auth/login", element: <Login /> },
+      { path: "/auth/register", element: <Register /> },
+      { path: "/auth/recovery", element: <ForgotPassword /> },
+      { path: "404", element: <MissingPage /> },
+    ],
+  },
+];
+
+export default Router;
+```
+
+## State Management
+
+Authentication state is managed in Redux:
+
+```javascript title="Redux Auth Slice"
+import { createSlice } from "@reduxjs/toolkit";
+
+const initialState = {
+  isAuthenticated: false,
+  user: null,
+  initialEmail: null,
+  userToComplete: null,
+};
+
+export const authSlice = createSlice({
+  name: 'auth',
+  initialState,
+  reducers: {
+    authStateChanged: (state, action) => {
+      state.isAuthenticated = action.payload.isAuthenticated;
+      state.user = action.payload.user;
+    },
+    setInitialEmail: (state, action) => {
+      state.initialEmail = action.payload.email;
+    },
+    setUserToComplete: (state, action) => {
+      state.userToComplete = action.payload.user;
+    },
+  },
+});
+
+export const {
+  authStateChanged,
+  setInitialEmail,
+  setUserToComplete
+} = authSlice.actions;
+
+export default authSlice.reducer;
+```
+
+### Accessing Auth State
+
+Components can access authentication state using Redux:
+
+```javascript
+import { useSelector } from 'react-redux';
+
+const MyComponent = () => {
+  const isAuthenticated = useSelector((state) => state.auth.isAuthenticated);
+  const user = useSelector((state) => state.auth.user);
+
+  return (
+    <div>
+      {isAuthenticated ? (
+        <p>Welcome, {user.name}!</p>
+      ) : (
+        <p>Please log in</p>
+      )}
+    </div>
+  );
+};
+```
+
+## User Profile Data Structure
+
+User data stored in Firestore includes:
+
+```javascript
+{
+  "uid": "user_firebase_uid",
+  "email": "user@example.com",
+  "name": "John Doe",
+  "phone": "+58 412 1234567",
+  "id": "12345678",
+  "id_type": "V",
+  "genre": {
+    "id": "male",
+    "name": "Masculino"
+  },
+  "address": {
+    "country": {
+      "code": "VE",
+      "name": "Venezuela"
+    },
+    "state": "Distrito Capital"
+  },
+  "status": true,
+  "account_validated": false,
+  "date": {
+    "created": "2024-01-15T10:30:00Z",
+    "updated": "",
+    "validated": ""
+  }
+}
+```
+
+## Session Persistence
+
+<Note>
+  Firebase automatically persists authentication sessions across page reloads using browser storage.
+</Note>
+
+### Return URL Functionality
+
+When unauthenticated users try to access protected routes:
+
+1. The current URL is saved to `sessionStorage`
+2. User is redirected to login
+3. After successful login, user is redirected back to the original URL
+
+```javascript title="src/guards/authGuard/AuthGuard.js:11-15"
+if (!isAuthenticated) {
+  const currentUrl = location.pathname + location.search;
+  sessionStorage.setItem('returnUrl', currentUrl);
+  navigate('/auth/checkEmail', { replace: true });
+}
+```
+
+```javascript title="src/guards/authGuard/GuestGuard.js:10-22"
+if (isAuthenticated) {
+  const returnUrl = sessionStorage.getItem('returnUrl');
+  const destination = returnUrl || '/';
+  
+  if (returnUrl) {
+    sessionStorage.removeItem('returnUrl');
+  }
+  
+  navigate(destination, { replace: true });
+}
+```
+
+## Password Reset
+
+Users can reset their password via email:
+
+```javascript title="Password Reset Flow"
+import { sendPasswordResetEmail } from 'firebase/auth';
+import { auth } from '../../guards/firebase/firebase';
+
+const handlePasswordReset = async (email) => {
+  try {
+    await sendPasswordResetEmail(auth, email);
+    
+    toast.success(
+      'Se ha enviado un correo para restablecer tu contraseña.',
+      {
+        position: "bottom-center",
+        autoClose: 7000,
+        theme: "light",
+      }
+    );
+  } catch (error) {
+    console.error('Error sending password reset email:', error);
+    toast.error('Error al enviar el correo de restablecimiento.');
+  }
+};
+```
+
+## Email Verification
+
+Send verification emails to new users:
+
+```javascript title="Email Verification"
+import { sendEmailVerification } from 'firebase/auth';
+
+const sendVerificationEmail = async (user) => {
+  try {
+    await sendEmailVerification(user);
+    toast.success('Correo de verificación enviado.');
+  } catch (error) {
+    console.error('Error sending verification email:', error);
+  }
+};
+```
+
+## Sign Out
+
+Implement sign out functionality:
+
+```javascript title="Sign Out"
+import { signOut } from 'firebase/auth';
+import { auth } from './guards/firebase/firebase';
+import { useDispatch } from 'react-redux';
+import { authStateChanged } from './store/apps/auth/authSlice';
+
+const handleSignOut = async () => {
+  try {
+    await signOut(auth);
+    
+    dispatch(authStateChanged({
+      isAuthenticated: false,
+      user: null,
+    }));
+    
+    navigate('/');
+  } catch (error) {
+    console.error('Error signing out:', error);
+  }
+};
+```
+
+## Best Practices
+
+1. **Always validate user status** - Check if `status === true` before allowing access
+2. **Store minimal data in Redux** - Keep only necessary user info in state
+3. **Use Firebase security rules** - Protect Firestore data with proper rules
+4. **Implement proper error handling** - Show user-friendly messages for auth errors
+5. **Save return URLs** - Allow users to continue where they left off after login
+6. **Validate email addresses** - Ensure users verify their email for account security
+7. **Use HTTPS only** - Never transmit authentication data over unencrypted connections
+8. **Clear sensitive data on logout** - Remove all user data from state and storage
+9. **Implement rate limiting** - Protect against brute force attacks
+10. **Log authentication events** - Track logins, logouts, and failed attempts for security

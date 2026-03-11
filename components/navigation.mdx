@@ -1,0 +1,624 @@
+---
+title: Navigation Components
+description: DropdownMenu, Tabs, and ScrollArea components for navigation
+---
+
+## DropdownMenu
+
+A dropdown menu component built on Radix UI DropdownMenu primitive.
+
+### Import
+
+```javascript
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuCheckboxItem,
+  DropdownMenuRadioItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuShortcut,
+  DropdownMenuGroup,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+  DropdownMenuRadioGroup,
+} from "@/components/ui/DropdownMenu"
+```
+
+### Component Architecture
+
+DropdownMenu is composed of many parts for flexible composition:
+
+- `DropdownMenu` - Root component
+- `DropdownMenuTrigger` - Button that opens the menu
+- `DropdownMenuContent` - The dropdown content (portaled)
+- `DropdownMenuItem` - Individual menu item
+- `DropdownMenuCheckboxItem` - Checkable menu item
+- `DropdownMenuRadioItem` - Radio button menu item
+- `DropdownMenuRadioGroup` - Groups radio items
+- `DropdownMenuLabel` - Section label
+- `DropdownMenuSeparator` - Visual separator
+- `DropdownMenuShortcut` - Keyboard shortcut display
+- `DropdownMenuGroup` - Groups related items
+- `DropdownMenuSub` - Submenu container
+- `DropdownMenuSubTrigger` - Opens submenu
+- `DropdownMenuSubContent` - Submenu content
+
+### Usage
+
+<Tabs>
+  <Tab title="Basic">
+    ```jsx
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="outline">Open Menu</Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent>
+        <DropdownMenuItem>Profile</DropdownMenuItem>
+        <DropdownMenuItem>Settings</DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem>Logout</DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+    ```
+  </Tab>
+  <Tab title="With Icons & Shortcuts">
+    ```jsx
+    import { User, Settings, LogOut } from "lucide-react"
+
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button>Account</Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent className="w-56">
+        <DropdownMenuLabel>My Account</DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem>
+          <User className="mr-2 h-4 w-4" />
+          <span>Profile</span>
+          <DropdownMenuShortcut>⇧⌘P</DropdownMenuShortcut>
+        </DropdownMenuItem>
+        <DropdownMenuItem>
+          <Settings className="mr-2 h-4 w-4" />
+          <span>Settings</span>
+          <DropdownMenuShortcut>⌘S</DropdownMenuShortcut>
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem>
+          <LogOut className="mr-2 h-4 w-4" />
+          <span>Logout</span>
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+    ```
+  </Tab>
+  <Tab title="With Checkboxes">
+    ```jsx
+    const [showStatus, setShowStatus] = useState(true)
+    const [showActivity, setShowActivity] = useState(false)
+
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="outline">View Options</Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent className="w-56">
+        <DropdownMenuLabel>Toggle Columns</DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        <DropdownMenuCheckboxItem
+          checked={showStatus}
+          onCheckedChange={setShowStatus}
+        >
+          Status Bar
+        </DropdownMenuCheckboxItem>
+        <DropdownMenuCheckboxItem
+          checked={showActivity}
+          onCheckedChange={setShowActivity}
+        >
+          Activity Log
+        </DropdownMenuCheckboxItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+    ```
+  </Tab>
+  <Tab title="With Radio Group">
+    ```jsx
+    const [position, setPosition] = useState("bottom")
+
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="outline">Panel Position</Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent className="w-56">
+        <DropdownMenuLabel>Position</DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        <DropdownMenuRadioGroup value={position} onValueChange={setPosition}>
+          <DropdownMenuRadioItem value="top">Top</DropdownMenuRadioItem>
+          <DropdownMenuRadioItem value="bottom">Bottom</DropdownMenuRadioItem>
+          <DropdownMenuRadioItem value="right">Right</DropdownMenuRadioItem>
+        </DropdownMenuRadioGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
+    ```
+  </Tab>
+  <Tab title="With Submenu">
+    ```jsx
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button>More Options</Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent className="w-56">
+        <DropdownMenuItem>New Tab</DropdownMenuItem>
+        <DropdownMenuItem>New Window</DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuSub>
+          <DropdownMenuSubTrigger>Share</DropdownMenuSubTrigger>
+          <DropdownMenuSubContent>
+            <DropdownMenuItem>Email</DropdownMenuItem>
+            <DropdownMenuItem>Message</DropdownMenuItem>
+            <DropdownMenuItem>Copy Link</DropdownMenuItem>
+          </DropdownMenuSubContent>
+        </DropdownMenuSub>
+      </DropdownMenuContent>
+    </DropdownMenu>
+    ```
+  </Tab>
+</Tabs>
+
+### Features
+
+- **Keyboard navigation** - Arrow keys, Enter, Escape
+- **Type-ahead** - Type to highlight items
+- **Portal rendering** - Avoids z-index issues
+- **Animations** - Smooth open/close transitions
+- **Icons** - Check marks and chevrons from lucide-react
+- **Submenus** - Nested menu support
+- **Checkboxes & Radio** - State management built-in
+- **Accessibility** - Full ARIA support
+
+### Props
+
+#### DropdownMenuItem
+
+- `inset` - Adds left padding (for alignment with labeled items)
+- `disabled` - Disables the item
+- `onSelect` - Callback when item is selected
+
+#### DropdownMenuCheckboxItem
+
+- `checked` - Controlled checked state
+- `onCheckedChange` - Callback when checked state changes
+
+#### DropdownMenuRadioItem
+
+- `value` - Value for radio item
+- Must be used within `DropdownMenuRadioGroup`
+
+---
+
+## Tabs
+
+A tabs component built on Radix UI Tabs primitive.
+
+### Import
+
+```javascript
+import {
+  Tabs,
+  TabsList,
+  TabsTrigger,
+  TabsContent,
+} from "@/components/ui/Tabs"
+```
+
+### Component Architecture
+
+- `Tabs` - Root component
+- `TabsList` - Container for tab triggers
+- `TabsTrigger` - Individual tab button
+- `TabsContent` - Content panel for each tab
+
+### Component Source
+
+```javascript
+import * as React from "react"
+import * as TabsPrimitive from "@radix-ui/react-tabs"
+import { cn } from "../../utils/cn";
+
+const Tabs = TabsPrimitive.Root
+
+const TabsList = React.forwardRef(({ className, ...props }, ref) => (
+  <TabsPrimitive.List
+    ref={ref}
+    className={cn(
+      "inline-flex h-10 items-center justify-center rounded-md bg-muted p-1 text-muted-foreground",
+      className
+    )}
+    {...props}
+  />
+))
+
+const TabsTrigger = React.forwardRef(({ className, ...props }, ref) => (
+  <TabsPrimitive.Trigger
+    ref={ref}
+    className={cn(
+      "inline-flex items-center justify-center whitespace-nowrap rounded-sm px-3 py-1.5 text-sm font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm",
+      className
+    )}
+    {...props}
+  />
+))
+
+const TabsContent = React.forwardRef(({ className, ...props }, ref) => (
+  <TabsPrimitive.Content
+    ref={ref}
+    className={cn(
+      "mt-2 ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+      className
+    )}
+    {...props}
+  />
+))
+```
+
+### Usage
+
+<Tabs>
+  <Tab title="Basic">
+    ```jsx
+    <Tabs defaultValue="account" className="w-[400px]">
+      <TabsList>
+        <TabsTrigger value="account">Account</TabsTrigger>
+        <TabsTrigger value="password">Password</TabsTrigger>
+      </TabsList>
+      <TabsContent value="account">
+        <p>Account settings content</p>
+      </TabsContent>
+      <TabsContent value="password">
+        <p>Password settings content</p>
+      </TabsContent>
+    </Tabs>
+    ```
+  </Tab>
+  <Tab title="With Cards">
+    ```jsx
+    <Tabs defaultValue="overview" className="w-full">
+      <TabsList>
+        <TabsTrigger value="overview">Overview</TabsTrigger>
+        <TabsTrigger value="analytics">Analytics</TabsTrigger>
+        <TabsTrigger value="reports">Reports</TabsTrigger>
+      </TabsList>
+      <TabsContent value="overview">
+        <Card>
+          <CardHeader>
+            <CardTitle>Overview</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p>Transaction overview content</p>
+          </CardContent>
+        </Card>
+      </TabsContent>
+      <TabsContent value="analytics">
+        <Card>
+          <CardHeader>
+            <CardTitle>Analytics</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p>Analytics charts and data</p>
+          </CardContent>
+        </Card>
+      </TabsContent>
+      <TabsContent value="reports">
+        <Card>
+          <CardHeader>
+            <CardTitle>Reports</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p>Generated reports</p>
+          </CardContent>
+        </Card>
+      </TabsContent>
+    </Tabs>
+    ```
+  </Tab>
+  <Tab title="Controlled">
+    ```jsx
+    const [activeTab, setActiveTab] = useState("pending")
+
+    <Tabs value={activeTab} onValueChange={setActiveTab}>
+      <TabsList className="grid w-full grid-cols-3">
+        <TabsTrigger value="pending">Pending</TabsTrigger>
+        <TabsTrigger value="approved">Approved</TabsTrigger>
+        <TabsTrigger value="rejected">Rejected</TabsTrigger>
+      </TabsList>
+      <TabsContent value="pending">
+        {/* Pending transactions */}
+      </TabsContent>
+      <TabsContent value="approved">
+        {/* Approved transactions */}
+      </TabsContent>
+      <TabsContent value="rejected">
+        {/* Rejected transactions */}
+      </TabsContent>
+    </Tabs>
+    ```
+  </Tab>
+  <Tab title="Full Width">
+    ```jsx
+    <Tabs defaultValue="all" className="w-full">
+      <TabsList className="grid w-full grid-cols-4">
+        <TabsTrigger value="all">All</TabsTrigger>
+        <TabsTrigger value="active">Active</TabsTrigger>
+        <TabsTrigger value="completed">Completed</TabsTrigger>
+        <TabsTrigger value="archived">Archived</TabsTrigger>
+      </TabsList>
+      <TabsContent value="all">
+        {/* Content */}
+      </TabsContent>
+      {/* Other TabsContent... */}
+    </Tabs>
+    ```
+  </Tab>
+</Tabs>
+
+### Features
+
+- **Keyboard navigation** - Arrow keys navigate between tabs
+- **Automatic activation** - Tabs activate on focus
+- **Orientation** - Supports horizontal and vertical layouts
+- **Accessibility** - Full ARIA support
+- **State management** - Controlled or uncontrolled
+
+### Props
+
+#### Tabs (Root)
+
+- `defaultValue` - Default active tab
+- `value` - Controlled active tab
+- `onValueChange` - Callback when tab changes
+- `orientation` - `"horizontal"` or `"vertical"` (default: horizontal)
+
+---
+
+## ScrollArea
+
+A custom scrollable area component built on Radix UI ScrollArea primitive.
+
+### Import
+
+```javascript
+import { ScrollArea, ScrollBar } from "@/components/ui/ScrollArea"
+```
+
+### Component Source
+
+```javascript
+import * as React from "react";
+import * as ScrollAreaPrimitive from "@radix-ui/react-scroll-area";
+import { cn } from "../../utils/cn";
+
+const ScrollArea = React.forwardRef(({ className, children, ...props }, ref) => (
+  <ScrollAreaPrimitive.Root
+    ref={ref}
+    className={cn("relative overflow-hidden", className)}
+    {...props}
+  >
+    <ScrollAreaPrimitive.Viewport className="h-full w-full rounded-[inherit]">
+      {children}
+    </ScrollAreaPrimitive.Viewport>
+    <ScrollBar />
+    <ScrollAreaPrimitive.Corner />
+  </ScrollAreaPrimitive.Root>
+));
+
+const ScrollBar = React.forwardRef(
+  ({ className, orientation = "vertical", ...props }, ref) => (
+    <ScrollAreaPrimitive.ScrollAreaScrollbar
+      ref={ref}
+      orientation={orientation}
+      className={cn(
+        "flex touch-none select-none transition-colors",
+        orientation === "vertical" && "h-full w-2.5 border-l border-l-transparent p-[1px]",
+        orientation === "horizontal" && "h-2.5 flex-col border-t border-t-transparent p-[1px]",
+        className
+      )}
+      {...props}
+    >
+      <ScrollAreaPrimitive.ScrollAreaThumb className="relative flex-1 rounded-full bg-border" />
+    </ScrollAreaPrimitive.ScrollAreaScrollbar>
+  )
+);
+```
+
+### Usage
+
+<Tabs>
+  <Tab title="Vertical">
+    ```jsx
+    <ScrollArea className="h-72 w-48 rounded-md border p-4">
+      <div className="space-y-4">
+        {Array.from({ length: 50 }).map((_, i) => (
+          <div key={i} className="text-sm">
+            Item {i + 1}
+          </div>
+        ))}
+      </div>
+    </ScrollArea>
+    ```
+  </Tab>
+  <Tab title="Horizontal">
+    ```jsx
+    <ScrollArea className="w-96 whitespace-nowrap rounded-md border">
+      <div className="flex w-max space-x-4 p-4">
+        {Array.from({ length: 20 }).map((_, i) => (
+          <div key={i} className="shrink-0">
+            <div className="w-[150px] h-[150px] bg-muted rounded-md" />
+          </div>
+        ))}
+      </div>
+      <ScrollBar orientation="horizontal" />
+    </ScrollArea>
+    ```
+  </Tab>
+  <Tab title="Transaction List">
+    ```jsx
+    <ScrollArea className="h-[400px] rounded-md border">
+      <div className="p-4">
+        <h4 className="mb-4 text-sm font-medium leading-none">Recent Transactions</h4>
+        {transactions.map((transaction) => (
+          <div key={transaction.id} className="border-b py-3">
+            <div className="flex justify-between">
+              <span className="font-medium">{transaction.description}</span>
+              <span className="text-muted-foreground">
+                ${transaction.amount}
+              </span>
+            </div>
+            <div className="text-sm text-muted-foreground">
+              {transaction.date}
+            </div>
+          </div>
+        ))}
+      </div>
+    </ScrollArea>
+    ```
+  </Tab>
+  <Tab title="Code Block">
+    ```jsx
+    <ScrollArea className="h-[300px] rounded-md border">
+      <div className="p-4">
+        <pre className="text-sm">
+          <code>
+            {`function processTransaction(data) {
+  // Validate transaction
+  if (!data.amount || !data.account) {
+    throw new Error('Invalid transaction')
+  }
+  
+  // Process payment
+  const result = await paymentGateway.process({
+    amount: data.amount,
+    account: data.account,
+    currency: data.currency || 'USD'
+  })
+  
+  return result
+}`}
+          </code>
+        </pre>
+      </div>
+    </ScrollArea>
+    ```
+  </Tab>
+</Tabs>
+
+### Features
+
+- **Custom scrollbars** - Styled to match your design system
+- **Vertical & Horizontal** - Both orientations supported
+- **Native feel** - Smooth scrolling like native scrollbars
+- **Cross-browser** - Consistent appearance across browsers
+- **Accessibility** - Keyboard scrolling support
+
+### Props
+
+#### ScrollArea
+
+- `className` - Additional CSS classes
+- `children` - Scrollable content
+
+#### ScrollBar
+
+- `orientation` - `"vertical"` or `"horizontal"` (default: vertical)
+- `className` - Additional CSS classes
+
+## Complete Navigation Example
+
+```jsx
+import { Button } from "@/components/ui/Button"
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+} from "@/components/ui/DropdownMenu"
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/Tabs"
+import { ScrollArea } from "@/components/ui/ScrollArea"
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/Card"
+import { User, Settings, LogOut } from "lucide-react"
+
+function TransactionDashboard() {
+  return (
+    <div className="space-y-4">
+      {/* Header with user menu */}
+      <div className="flex justify-between items-center">
+        <h1 className="text-2xl font-bold">Transactions</h1>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline">
+              <User className="mr-2 h-4 w-4" />
+              Account
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-56">
+            <DropdownMenuLabel>My Account</DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem>
+              <User className="mr-2 h-4 w-4" />
+              Profile
+            </DropdownMenuItem>
+            <DropdownMenuItem>
+              <Settings className="mr-2 h-4 w-4" />
+              Settings
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem>
+              <LogOut className="mr-2 h-4 w-4" />
+              Logout
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+
+      {/* Tabs with scrollable content */}
+      <Tabs defaultValue="pending" className="w-full">
+        <TabsList>
+          <TabsTrigger value="pending">Pending</TabsTrigger>
+          <TabsTrigger value="approved">Approved</TabsTrigger>
+          <TabsTrigger value="rejected">Rejected</TabsTrigger>
+        </TabsList>
+        
+        <TabsContent value="pending">
+          <Card>
+            <CardHeader>
+              <CardTitle>Pending Transactions</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ScrollArea className="h-[400px]">
+                <div className="space-y-4">
+                  {pendingTransactions.map((tx) => (
+                    <div key={tx.id} className="border-b pb-4">
+                      <div className="flex justify-between">
+                        <span className="font-medium">{tx.description}</span>
+                        <span>${tx.amount}</span>
+                      </div>
+                      <div className="text-sm text-muted-foreground">
+                        {tx.date}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </ScrollArea>
+            </CardContent>
+          </Card>
+        </TabsContent>
+        
+        {/* Similar content for other tabs */}
+      </Tabs>
+    </div>
+  )
+}
+```

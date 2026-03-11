@@ -1,0 +1,594 @@
+---
+title: 'Routing and Navigation'
+description: 'Learn how React Router handles navigation, route guards, and code splitting'
+---
+
+TradeMaster Transactions uses React Router v6 for client-side routing with authentication guards and lazy loading for optimal performance.
+
+## Router Configuration
+
+The main router configuration is in `src/routes/router.js`. It defines all application routes with their layouts and protection levels.
+
+### Route Structure
+
+From `src/routes/router.js:29-93`:
+
+```javascript
+const Router = [
+  {
+    path: "/",
+    element: <FullLayout />,
+    children: [
+      { path: "/", element: <Home /> },
+      { path: "/event/:id", element: <Event /> },
+      { path: "/events", element: <EventList /> },
+      { path: "/contacto", element: <Contact /> },
+      { path: "*", element: <Navigate to="/auth/404" /> },
+    ],
+  },
+  {
+    path: "/purchaseOrder",
+    element: (
+      <AuthGuard>
+        <FullLayout />
+      </AuthGuard>
+    ),
+    children: [
+      { path: "/purchaseOrder", element: <Navigate to="/" /> },
+      { path: "/purchaseOrder/:idEvent", element: <PurchaseOrder /> },
+    ],
+  },
+  // ... more route groups
+];
+```
+
+## Route Groups
+
+The application is organized into logical route groups:
+
+### Public Routes
+
+**Layout**: `FullLayout` (with navigation)
+
+**Routes**:
+- `/` - Homepage
+- `/event/:id` - Event detail page (dynamic event ID)
+- `/events` - Event listings
+- `/contacto` - Contact page
+
+**Protection**: None (accessible to all users)
+
+```javascript
+{
+  path: "/",
+  element: <FullLayout />,
+  children: [
+    { path: "/", element: <Home /> },
+    { path: "/event/:id", element: <Event /> },
+    { path: "/events", element: <EventList /> },
+    { path: "/contacto", element: <Contact /> },
+    { path: "*", element: <Navigate to="/auth/404" /> },
+  ],
+}
+```
+
+### Purchase Routes (Protected)
+
+**Layout**: `FullLayout` wrapped with `AuthGuard`
+
+**Routes**:
+- `/purchaseOrder/:idEvent` - Ticket checkout for specific event
+- `/purchaseSuccess/:idEvent/:idOrder` - Order confirmation page
+
+**Protection**: Requires authentication
+
+<CodeGroup>
+```javascript Purchase Order
+{
+  path: "/purchaseOrder",
+  element: (
+    <AuthGuard>
+      <FullLayout />
+    </AuthGuard>
+  ),
+  children: [
+    { path: "/purchaseOrder", element: <Navigate to="/" /> },
+    { path: "/purchaseOrder/:idEvent", element: <PurchaseOrder /> },
+  ],
+}
+```
+
+```javascript Purchase Success
+{
+  path: "/purchaseSuccess",
+  element: (
+    <AuthGuard>
+      <FullLayout />
+    </AuthGuard>
+  ),
+  children: [
+    { path: "/purchaseSuccess", element: <Navigate to="/" /> },
+    { path: "/purchaseSuccess/:idEvent/:idOrder", element: <PurchaseSuccess /> },
+  ],
+}
+```
+</CodeGroup>
+
+### User Profile Routes (Protected)
+
+**Layout**: `FullLayout` wrapped with `AuthGuard`
+
+**Routes**:
+- `/profileUser` - User profile management
+
+**Protection**: Requires authentication
+
+```javascript
+{
+  path: "/profileUser",
+  element: (
+    <AuthGuard>
+      <FullLayout />
+    </AuthGuard>
+  ),
+  children: [
+    { path: "/profileUser", element: <ProfileUser /> },
+  ]
+}
+```
+
+### Authentication Routes (Guest Only)
+
+**Layout**: `BlankLayout` (minimal, no navigation) wrapped with `GuestGuard`
+
+**Routes**:
+- `/auth/checkEmail` - Email verification step
+- `/auth/login` - User login
+- `/auth/register` - User registration
+- `/auth/recovery` - Password recovery
+- `/auth/404` - 404 error page
+
+**Protection**: Redirects authenticated users away
+
+```javascript
+{
+  path: "/auth",
+  element: (
+    <GuestGuard>
+      <BlankLayout />
+    </GuestGuard>
+  ),
+  children: [
+    { path: "/auth", element: <Navigate to="/auth/checkEmail" /> },
+    { path: "/auth/checkEmail", element: <EmailCheck /> },
+    { path: "/auth/login", element: <Login /> },
+    { path: "/auth/register", element: <Register /> },
+    { path: "/auth/recovery", element: <ForgotPassword /> },
+    { path: "404", element: <MissingPage /> },
+    { path: "*", element: <Navigate to="/auth/404" /> },
+  ],
+}
+```
+
+## Route Guards
+
+Route guards control access to protected routes based on authentication state.
+
+### AuthGuard
+
+**Location**: `src/guards/authGuard/AuthGuard.js`
+
+**Purpose**: Protects routes that require authentication
+
+**Implementation** (`src/guards/authGuard/AuthGuard.js:5-22`):
+
+```javascript
+const AuthGuard = ({ children }) => {
+  const isAuthenticated = useSelector((state) => state.auth.isAuthenticated);
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  useEffect(() => {
+    if (!isAuthenticated) {
+      // Save current URL to return after login
+      const currentUrl = location.pathname + location.search;
+      sessionStorage.setItem('returnUrl', currentUrl);
+      navigate('/auth/checkEmail', { replace: true });
+    }
+  }, [isAuthenticated, location, navigate]);
+
+  return children;
+};
+```
+
+**Behavior**:
+1. Checks `isAuthenticated` from Redux store
+2. If not authenticated:
+   - Saves current URL to `sessionStorage` (for post-login redirect)
+   - Redirects to `/auth/checkEmail`
+3. If authenticated, renders children (the protected route)
+
+**Usage**:
+```javascript
+import AuthGuard from '../guards/authGuard/AuthGuard';
+
+<AuthGuard>
+  <ProtectedComponent />
+</AuthGuard>
+```
+
+### GuestGuard
+
+**Location**: `src/guards/authGuard/GuestGuard.js`
+
+**Purpose**: Prevents authenticated users from accessing auth pages (login, register)
+
+**Implementation** (`src/guards/authGuard/GuestGuard.js:5-29`):
+
+```javascript
+const GuestGuard = ({ children }) => {
+  const isAuthenticated = useSelector((state) => state.auth.isAuthenticated);
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      // Read returnUrl from sessionStorage
+      const returnUrl = sessionStorage.getItem('returnUrl');
+
+      // Redirect to saved URL or homepage
+      const destination = returnUrl || '/';
+
+      // Clear returnUrl from sessionStorage
+      if (returnUrl) {
+        sessionStorage.removeItem('returnUrl');
+      }
+
+      navigate(destination, { replace: true });
+    }
+  }, [isAuthenticated, navigate]);
+
+  return children;
+};
+```
+
+**Behavior**:
+1. Checks `isAuthenticated` from Redux store
+2. If authenticated:
+   - Retrieves saved `returnUrl` from `sessionStorage`
+   - Redirects to saved URL (or `/` if none)
+   - Clears `returnUrl` from storage
+3. If not authenticated, renders children (auth pages)
+
+**Usage**:
+```javascript
+import GuestGuard from '../guards/authGuard/GuestGuard';
+
+<GuestGuard>
+  <LoginPage />
+</GuestGuard>
+```
+
+### Return URL Flow
+
+The guards work together to provide a seamless authentication experience:
+
+<Steps>
+  <Step title="User visits protected page">
+    User navigates to `/purchaseOrder/event123` without being logged in.
+  </Step>
+
+  <Step title="AuthGuard saves URL">
+    `AuthGuard` saves `/purchaseOrder/event123` to `sessionStorage.returnUrl`.
+  </Step>
+
+  <Step title="Redirect to login">
+    User is redirected to `/auth/checkEmail` (or `/auth/login`).
+  </Step>
+
+  <Step title="User authenticates">
+    User completes email check and login process.
+  </Step>
+
+  <Step title="GuestGuard redirects back">
+    `GuestGuard` detects authentication, reads `returnUrl`, and redirects user to `/purchaseOrder/event123`.
+  </Step>
+</Steps>
+
+## Lazy Loading
+
+All route components are lazy-loaded using React's `lazy()` and a custom `Loadable` wrapper for code splitting.
+
+### Loadable Component
+
+**Location**: `src/layouts/full/shared/loadable/Loadable.js`
+
+**Implementation** (`src/layouts/full/shared/loadable/Loadable.js:5-12`):
+
+```javascript
+import React, { Suspense } from "react";
+import Spinner from "../../../../views/spinner/Spinner";
+
+const Loadable = (Component) => (props) =>
+  (
+    <Suspense fallback={<Spinner />}>
+      <Component {...props} />
+    </Suspense>
+  );
+
+export default Loadable;
+```
+
+**Features**:
+- Wraps lazy-loaded components with `React.Suspense`
+- Shows `<Spinner />` while component is loading
+- Improves initial load time by splitting code
+
+### Lazy Loading Routes
+
+From `src/routes/router.js:1-27`:
+
+```javascript
+import React, { lazy } from "react";
+import Loadable from "../layouts/full/shared/loadable/Loadable";
+
+// Layouts
+const BlankLayout = Loadable(lazy(() => import("../layouts/blank/BlankLayout")));
+const FullLayout = Loadable(lazy(() => import("../layouts/full/FullLayout")));
+
+// Pages
+const Home = Loadable(lazy(() => import("../views/home/Home")));
+const Event = Loadable(lazy(() => import("../views/event/Event")));
+const EventList = Loadable(lazy(() => import("../views/eventList/EventList")));
+const Contact = Loadable(lazy(() => import("../views/contact/Contact")));
+const PurchaseOrder = Loadable(lazy(() => import("../views/purchaseOrder/PurchaseOrder")));
+const PurchaseSuccess = Loadable(lazy(() => import("../views/purchaseSuccess/PurchaseSuccess")));
+const ProfileUser = Loadable(lazy(() => import("../views/user/profile/ProfileUser")));
+
+// Authentication
+const Login = Loadable(lazy(() => import("../views/auth/login/Login")));
+const Register = Loadable(lazy(() => import("../views/auth/register/Register")));
+const ForgotPassword = Loadable(lazy(() => import("../views/auth/forgotPassword/ForgotPassword")));
+const EmailCheck = Loadable(lazy(() => import("../views/auth/emailCheck/EmailCheck")));
+const MissingPage = Loadable(lazy(() => import("../views/auth/MissingPage")));
+```
+
+**Benefits**:
+- Smaller initial bundle size
+- Faster time to interactive
+- Components loaded on-demand
+- Better performance on slow connections
+
+## Navigation Patterns
+
+### Programmatic Navigation
+
+```javascript
+import { useNavigate } from 'react-router-dom';
+
+const MyComponent = () => {
+  const navigate = useNavigate();
+
+  const goToEvent = (eventId) => {
+    navigate(`/event/${eventId}`);
+  };
+
+  const goBack = () => {
+    navigate(-1); // Go back one page
+  };
+
+  return (
+    <button onClick={() => goToEvent('123')}>View Event</button>
+  );
+};
+```
+
+### Link Navigation
+
+```javascript
+import { Link } from 'react-router-dom';
+
+const EventCard = ({ eventId, title }) => {
+  return (
+    <Link to={`/event/${eventId}`}>
+      {title}
+    </Link>
+  );
+};
+```
+
+### Dynamic Route Parameters
+
+```javascript
+import { useParams } from 'react-router-dom';
+
+const EventDetail = () => {
+  const { id } = useParams(); // From /event/:id
+
+  return <div>Event ID: {id}</div>;
+};
+```
+
+### Query Parameters
+
+```javascript
+import { useSearchParams } from 'react-router-dom';
+
+const SearchResults = () => {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const query = searchParams.get('q');
+
+  const updateSearch = (newQuery) => {
+    setSearchParams({ q: newQuery });
+  };
+
+  return <div>Searching for: {query}</div>;
+};
+```
+
+### Current Location
+
+```javascript
+import { useLocation } from 'react-router-dom';
+
+const Breadcrumbs = () => {
+  const location = useLocation();
+  const pathSegments = location.pathname.split('/').filter(Boolean);
+
+  return (
+    <nav>
+      {pathSegments.map((segment, index) => (
+        <span key={index}>{segment}</span>
+      ))}
+    </nav>
+  );
+};
+```
+
+## Redirect Patterns
+
+### Conditional Redirect
+
+```javascript
+import { Navigate } from 'react-router-dom';
+import { useSelector } from 'react-redux';
+
+const ProtectedRoute = ({ children }) => {
+  const isAuthenticated = useSelector((state) => state.auth.isAuthenticated);
+
+  if (!isAuthenticated) {
+    return <Navigate to="/auth/login" replace />;
+  }
+
+  return children;
+};
+```
+
+### Default Route Redirect
+
+```javascript
+// Redirect /purchaseOrder to / (requires event ID)
+{ path: "/purchaseOrder", element: <Navigate to="/" /> }
+
+// Redirect /auth to /auth/checkEmail
+{ path: "/auth", element: <Navigate to="/auth/checkEmail" /> }
+```
+
+### 404 Catch-All
+
+```javascript
+// Catch all unmatched routes
+{ path: "*", element: <Navigate to="/auth/404" /> }
+```
+
+## Best Practices
+
+<Note>
+**Route Organization**
+- Group related routes together
+- Use nested routes for shared layouts
+- Keep route definitions in a central location
+- Use descriptive path names
+</Note>
+
+<Note>
+**Authentication**
+- Always use guards for protected routes
+- Save return URLs for better UX
+- Clear sensitive data from sessionStorage after use
+- Use `replace: true` to prevent back button issues
+</Note>
+
+<Note>
+**Performance**
+- Lazy load all route components
+- Use code splitting for large bundles
+- Preload critical routes
+- Show loading indicators during navigation
+</Note>
+
+<Note>
+**Navigation**
+- Prefer `<Link>` for internal navigation
+- Use `navigate()` for programmatic redirects
+- Avoid hard page reloads (use React Router instead)
+- Handle loading states during navigation
+</Note>
+
+## Common Patterns
+
+### Protected Route with Loading
+
+```javascript
+import { useSelector } from 'react-redux';
+import { Navigate } from 'react-router-dom';
+
+const ProtectedRoute = ({ children }) => {
+  const isAuthenticated = useSelector((state) => state.auth.isAuthenticated);
+  const isInitialized = useSelector((state) => state.auth.isInitialized);
+
+  if (!isInitialized) {
+    return <Spinner />; // Wait for auth state to load
+  }
+
+  if (!isAuthenticated) {
+    return <Navigate to="/auth/checkEmail" replace />;
+  }
+
+  return children;
+};
+```
+
+### Breadcrumb Navigation
+
+```javascript
+import { Link, useLocation } from 'react-router-dom';
+
+const Breadcrumbs = () => {
+  const location = useLocation();
+  const pathnames = location.pathname.split('/').filter(x => x);
+
+  return (
+    <nav>
+      <Link to="/">Home</Link>
+      {pathnames.map((name, index) => {
+        const routeTo = `/${pathnames.slice(0, index + 1).join('/')}`;
+        const isLast = index === pathnames.length - 1;
+        
+        return isLast ? (
+          <span key={name}>{name}</span>
+        ) : (
+          <Link key={name} to={routeTo}>{name}</Link>
+        );
+      })}
+    </nav>
+  );
+};
+```
+
+### Modal Routes
+
+```javascript
+import { useNavigate, useLocation } from 'react-router-dom';
+
+const EventModal = () => {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const background = location.state?.background;
+
+  const closeModal = () => {
+    navigate(background || '/');
+  };
+
+  return (
+    <Dialog open onOpenChange={closeModal}>
+      {/* Modal content */}
+    </Dialog>
+  );
+};
+```
+
+## Next Steps
+
+- Explore [State Management](/development/state-management)
+- Review [Project Structure](/development/project-structure)
+- Check [Local Setup](/development/local-setup) guide

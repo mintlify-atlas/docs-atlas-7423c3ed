@@ -1,0 +1,355 @@
+---
+title: 'Environment Variables'
+description: 'Complete reference for all environment variables used in TradeMaster Transactions Portales'
+icon: 'code'
+---
+
+## Overview
+
+TradeMaster Transactions Portales uses environment variables for configuration management. This allows you to maintain different configurations for development, staging, and production environments.
+
+## Environment File Structure
+
+The application uses Vite's environment variable system with the following files:
+
+- `.env.local` - Local development overrides (not committed to git)
+- `.env.development` - Development environment defaults
+- `.env.production` - Production environment settings
+
+<Warning>
+  Never commit `.env.local` or files containing sensitive credentials to version control. Add them to `.gitignore`.
+</Warning>
+
+## Vite Environment Variables
+
+<Info>
+  Vite exposes environment variables prefixed with `VITE_` to your client-side code. Variables without this prefix are only available during build time.
+</Info>
+
+### Accessing Environment Variables
+
+```javascript
+// Correct way to access environment variables in Vite
+const apiKey = import.meta.env.VITE_STRIPE_PUBLIC_KEY;
+const mode = import.meta.env.MODE; // 'development' or 'production'
+const isDev = import.meta.env.DEV; // boolean
+const isProd = import.meta.env.PROD; // boolean
+```
+
+## Required Environment Variables
+
+### Stripe Configuration
+
+<ParamField path="VITE_STRIPE_PUBLIC_KEY" type="string" required>
+  Your Stripe publishable API key. Use test keys for development (`pk_test_...`) and live keys for production (`pk_live_...`).
+  
+  **Example:**
+  ```bash
+  VITE_STRIPE_PUBLIC_KEY=pk_test_51234567890abcdefghijklmnopqrstuvwxyz
+  ```
+  
+  **Location:** Used in `src/guards/stripe/stripeConfig.js`
+</ParamField>
+
+### Firebase Configuration
+
+<Info>
+  Firebase configuration is currently hardcoded in `src/guards/firebase/firebase.js`. For better security, consider moving these to environment variables.
+</Info>
+
+While not currently used as environment variables, these Firebase settings should be configured:
+
+<ParamField path="VITE_FIREBASE_API_KEY" type="string">
+  Firebase API key for your project.
+  
+  **Example:**
+  ```bash
+  VITE_FIREBASE_API_KEY=AIzaSyD1bPm1YvtQKwAyXNUxE--YbkbEwydCuCI
+  ```
+</ParamField>
+
+<ParamField path="VITE_FIREBASE_AUTH_DOMAIN" type="string">
+  Firebase authentication domain.
+  
+  **Example:**
+  ```bash
+  VITE_FIREBASE_AUTH_DOMAIN=trademastertransaction-project.firebaseapp.com
+  ```
+</ParamField>
+
+<ParamField path="VITE_FIREBASE_PROJECT_ID" type="string">
+  Your Firebase project identifier.
+  
+  **Example:**
+  ```bash
+  VITE_FIREBASE_PROJECT_ID=trademastertransaction-project
+  ```
+</ParamField>
+
+<ParamField path="VITE_FIREBASE_STORAGE_BUCKET" type="string">
+  Firebase Storage bucket URL.
+  
+  **Example:**
+  ```bash
+  VITE_FIREBASE_STORAGE_BUCKET=trademastertransaction-project.appspot.com
+  ```
+</ParamField>
+
+<ParamField path="VITE_FIREBASE_MESSAGING_SENDER_ID" type="string">
+  Firebase Cloud Messaging sender ID.
+  
+  **Example:**
+  ```bash
+  VITE_FIREBASE_MESSAGING_SENDER_ID=324510208107
+  ```
+</ParamField>
+
+<ParamField path="VITE_FIREBASE_APP_ID" type="string">
+  Firebase application ID.
+  
+  **Example:**
+  ```bash
+  VITE_FIREBASE_APP_ID=1:324510208107:web:63af97fd7bea1f9e93212e
+  ```
+</ParamField>
+
+## Optional Environment Variables
+
+### Application Settings
+
+<ParamField path="VITE_APP_NAME" type="string" default="TradeMaster Transactions">
+  Application display name.
+  
+  **Example:**
+  ```bash
+  VITE_APP_NAME="TradeMaster Transactions Portales"
+  ```
+</ParamField>
+
+<ParamField path="VITE_API_BASE_URL" type="string">
+  Base URL for external API calls (if applicable).
+  
+  **Example:**
+  ```bash
+  VITE_API_BASE_URL=https://api.trademastertransactions.com
+  ```
+</ParamField>
+
+### Feature Flags
+
+<ParamField path="VITE_ENABLE_ANALYTICS" type="boolean" default="false">
+  Enable or disable analytics tracking.
+  
+  **Example:**
+  ```bash
+  VITE_ENABLE_ANALYTICS=true
+  ```
+</ParamField>
+
+<ParamField path="VITE_DEBUG_MODE" type="boolean" default="false">
+  Enable debug logging in production.
+  
+  **Example:**
+  ```bash
+  VITE_DEBUG_MODE=false
+  ```
+</ParamField>
+
+## Environment File Examples
+
+### Development Environment
+
+<CodeGroup>
+
+```bash .env.local (Local Development)
+# Stripe Configuration (Test Mode)
+VITE_STRIPE_PUBLIC_KEY=pk_test_51234567890abcdefghijklmnopqrstuvwxyz
+
+# Firebase Configuration
+VITE_FIREBASE_API_KEY=AIzaSyD1bPm1YvtQKwAyXNUxE--YbkbEwydCuCI
+VITE_FIREBASE_AUTH_DOMAIN=trademastertransaction-project.firebaseapp.com
+VITE_FIREBASE_PROJECT_ID=trademastertransaction-project
+VITE_FIREBASE_STORAGE_BUCKET=trademastertransaction-project.appspot.com
+VITE_FIREBASE_MESSAGING_SENDER_ID=324510208107
+VITE_FIREBASE_APP_ID=1:324510208107:web:63af97fd7bea1f9e93212e
+
+# Application Settings
+VITE_APP_NAME="TradeMaster Transactions (Dev)"
+VITE_DEBUG_MODE=true
+VITE_ENABLE_ANALYTICS=false
+```
+
+```bash .env.production (Production)
+# Stripe Configuration (Live Mode)
+VITE_STRIPE_PUBLIC_KEY=pk_live_51234567890abcdefghijklmnopqrstuvwxyz
+
+# Firebase Configuration
+VITE_FIREBASE_API_KEY=AIzaSyD1bPm1YvtQKwAyXNUxE--YbkbEwydCuCI
+VITE_FIREBASE_AUTH_DOMAIN=trademastertransaction-project.firebaseapp.com
+VITE_FIREBASE_PROJECT_ID=trademastertransaction-project
+VITE_FIREBASE_STORAGE_BUCKET=trademastertransaction-project.appspot.com
+VITE_FIREBASE_MESSAGING_SENDER_ID=324510208107
+VITE_FIREBASE_APP_ID=1:324510208107:web:63af97fd7bea1f9e93212e
+
+# Application Settings
+VITE_APP_NAME="TradeMaster Transactions"
+VITE_DEBUG_MODE=false
+VITE_ENABLE_ANALYTICS=true
+```
+
+</CodeGroup>
+
+## Setting Up Environment Variables
+
+<Steps>
+  <Step title="Create Environment File">
+    Create a `.env.local` file in the root of your project:
+    ```bash
+    touch .env.local
+    ```
+  </Step>
+
+  <Step title="Add Variables">
+    Add your environment-specific variables:
+    ```bash
+    VITE_STRIPE_PUBLIC_KEY=pk_test_your_key_here
+    ```
+  </Step>
+
+  <Step title="Restart Development Server">
+    Environment variables are loaded at build time, so restart your dev server:
+    ```bash
+    npm run dev
+    ```
+  </Step>
+
+  <Step title="Verify Configuration">
+    Check that variables are loaded correctly:
+    ```javascript
+    console.log('Stripe Key:', import.meta.env.VITE_STRIPE_PUBLIC_KEY);
+    console.log('Mode:', import.meta.env.MODE);
+    ```
+  </Step>
+</Steps>
+
+## Security Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Never Commit Secrets" icon="lock">
+    Add `.env.local` to `.gitignore` to prevent committing sensitive data
+  </Card>
+  
+  <Card title="Use Different Keys" icon="key">
+    Use separate API keys for development, staging, and production
+  </Card>
+  
+  <Card title="Prefix Client Variables" icon="eye">
+    Only use `VITE_` prefix for variables safe to expose in the browser
+  </Card>
+  
+  <Card title="Document Requirements" icon="book">
+    Maintain a `.env.example` file with all required variables (without values)
+  </Card>
+</CardGroup>
+
+### Example .env.example File
+
+```bash .env.example
+# Stripe Configuration
+VITE_STRIPE_PUBLIC_KEY=
+
+# Firebase Configuration
+VITE_FIREBASE_API_KEY=
+VITE_FIREBASE_AUTH_DOMAIN=
+VITE_FIREBASE_PROJECT_ID=
+VITE_FIREBASE_STORAGE_BUCKET=
+VITE_FIREBASE_MESSAGING_SENDER_ID=
+VITE_FIREBASE_APP_ID=
+
+# Application Settings
+VITE_APP_NAME=
+VITE_DEBUG_MODE=
+VITE_ENABLE_ANALYTICS=
+```
+
+## Migrating Firebase Config to Environment Variables
+
+To improve security, you can migrate the hardcoded Firebase configuration to environment variables:
+
+<Steps>
+  <Step title="Update firebase.js">
+    Modify `src/guards/firebase/firebase.js`:
+    ```javascript
+    const firebaseConfig = {
+      apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+      authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+      projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+      storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+      messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+      appId: import.meta.env.VITE_FIREBASE_APP_ID
+    };
+    ```
+  </Step>
+
+  <Step title="Add Variables to .env.local">
+    Copy your Firebase config values to `.env.local`
+  </Step>
+
+  <Step title="Test Configuration">
+    Verify Firebase authentication and database connections still work
+  </Step>
+</Steps>
+
+## Troubleshooting
+
+### Variables Not Loading
+
+**Problem**: Environment variables return `undefined`
+
+**Solutions**:
+1. Ensure variable names start with `VITE_`
+2. Restart your development server after adding new variables
+3. Check for typos in variable names
+4. Verify the `.env.local` file is in the project root
+
+### Different Values in Production
+
+**Problem**: Production build uses wrong values
+
+**Solutions**:
+1. Create separate `.env.production` file
+2. Set environment variables in your hosting platform (Firebase Hosting, Vercel, etc.)
+3. Verify build command includes correct environment
+
+### TypeScript IntelliSense
+
+For TypeScript projects, add type definitions:
+
+```typescript vite-env.d.ts
+/// <reference types="vite/client" />
+
+interface ImportMetaEnv {
+  readonly VITE_STRIPE_PUBLIC_KEY: string
+  readonly VITE_FIREBASE_API_KEY: string
+  readonly VITE_FIREBASE_AUTH_DOMAIN: string
+  readonly VITE_FIREBASE_PROJECT_ID: string
+  readonly VITE_FIREBASE_STORAGE_BUCKET: string
+  readonly VITE_FIREBASE_MESSAGING_SENDER_ID: string
+  readonly VITE_FIREBASE_APP_ID: string
+}
+
+interface ImportMeta {
+  readonly env: ImportMetaEnv
+}
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Firebase Setup" icon="fire" href="/configuration/firebase-setup">
+    Configure Firebase services
+  </Card>
+  <Card title="Theme Customization" icon="palette" href="/configuration/theme-customization">
+    Customize portal appearance
+  </Card>
+</CardGroup>

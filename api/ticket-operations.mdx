@@ -1,0 +1,504 @@
+---
+title: 'Ticket Operations'
+description: 'APIs for ticket listing, locking, unlocking, and availability management'
+icon: 'ticket'
+---
+
+## Overview
+
+Ticket operations manage the lifecycle of ticket reservations, including retrieving available tickets, locking them during checkout, and releasing them if the purchase is not completed.
+
+## tickets_list_event_sales_virtual
+
+Retrieves all tickets available for sale for a specific event, including their status, zone, and pricing information.
+
+<ParamField path="event_id" type="string" required>
+  The unique identifier of the event
+</ParamField>
+
+### Request Example
+
+```javascript
+import { tickets_list_event_sales_virtual } from '@/guards/firebase/firebase';
+
+const getTickets = await tickets_list_event_sales_virtual({ 
+  event_id: params.idEvent 
+});
+```
+
+### Usage in Components
+
+Typical usage in PurchaseOrder component to load ticket data:
+
+```javascript
+import { db, tickets_list_event_sales_virtual } from '@/guards/firebase/firebase';
+import { getDoc, doc } from 'firebase/firestore';
+
+const fetchTicketData = async () => {
+  try {
+    dispatch(setLoadingData({ loading: true }));
+    
+    // Get zone configuration from Firestore
+    const querySnapshot = await getDoc(
+      doc(db, `/events/${params.idEvent}/setup`, 'zones')
+    );
+    
+    // Get all tickets for the event
+    const getTickets = await tickets_list_event_sales_virtual({ 
+      event_id: params.idEvent 
+    });
+    
+    // Filter for public zones only
+    const filterZones = querySnapshot.data().zone.filter(
+      (x) => x.public === true && x.status === true
+    );
+    
+    // Organize tickets by zone
+    const seatData = {};
+    filterZones.forEach((zone) => {
+      const filterTicketsZone = getTickets?.data.response.filter(
+        (x) => x.zone === zone.name
+      );
+      let seats = generateSeats(zone, filterTicketsZone);
+      seatData[zone.name] = seats;
+    });
+    
+    setSeatSections(seatData);
+    dispatch(setLoadingData({ loading: false }));
+  } catch (error) {
+    console.error('Error fetching ticket data:', error);
+  }
+};
+```
+
+### Response
+
+<ResponseField name="response" type="array">
+  Array of ticket objects
+  
+  <ResponseField name="ticket_id" type="string">
+    Unique ticket identifier
+  </ResponseField>
+  
+  <ResponseField name="id" type="string">
+    Display ID or seat number
+  </ResponseField>
+  
+  <ResponseField name="zone" type="string">
+    Zone name (e.g., "VIP", "General", "Platea")
+  </ResponseField>
+  
+  <ResponseField name="price" type="number">
+    Ticket price
+  </ResponseField>
+  
+  <ResponseField name="status" type="string">
+    Ticket status: "available", "locked", "sold"
+  </ResponseField>
+  
+  <ResponseField name="row" type="string">
+    Row identifier (if applicable)
+  </ResponseField>
+  
+  <ResponseField name="seat" type="string">
+    Seat number (if applicable)
+  </ResponseField>
+  
+  <ResponseField name="locked_until" type="timestamp">
+    Timestamp when lock expires (if locked)
+  </ResponseField>
+</ResponseField>
+
+#### Response Example
+
+```json
+{
+  "response": [
+    {
+      "ticket_id": "ticket_abc123",
+      "id": "A-001",
+      "zone": "VIP",
+      "price": 150,
+      "status": "available",
+      "row": "A",
+      "seat": "001",
+      "locked_until": null
+    },
+    {
+      "ticket_id": "ticket_def456",
+      "id": "A-002",
+      "zone": "VIP",
+      "price": 150,
+      "status": "locked",
+      "row": "A",
+      "seat": "002",
+      "locked_until": 1710512345000
+    },
+    {
+      "ticket_id": "ticket_ghi789",
+      "id": "B-001",
+      "zone": "General",
+      "price": 75,
+      "status": "available",
+      "row": "B",
+      "seat": "001",
+      "locked_until": null
+    }
+  ]
+}
+```
+
+<Note>
+  Only show tickets with status "available" to customers. Locked tickets are temporarily reserved by other users, and sold tickets are no longer available.
+</Note>
+
+---
+
+## tickets_lock_virtual
+
+Locks selected tickets for a specified duration to prevent other users from purchasing them during checkout.
+
+<ParamField path="ticketd_reserved" type="array" required>
+  Array of ticket IDs to lock
+</ParamField>
+
+<ParamField path="reserved_time" type="number" required>
+  Lock duration in seconds (typically 600 = 10 minutes)
+</ParamField>
+
+### Request Example
+
+```javascript
+import { tickets_lock_virtual } from '@/guards/firebase/firebase';
+
+const selectedSeats = [
+  { ticket_id: 'ticket_abc123', id: 'A-001' },
+  { ticket_id: 'ticket_def456', id: 'A-002' }
+];
+
+const seatsArray = selectedSeats.map((seat) => seat.ticket_id);
+
+const lockSeats = await tickets_lock_virtual({ 
+  ticketd_reserved: seatsArray, 
+  reserved_time: 600 
+});
+```
+
+### Complete Usage Example
+
+```javascript
+const confirmSeats = async () => {
+  try {
+    setSubmitConfirmSeat(true);
+    dispatch(setLoadingData({ loading: true }));
+    
+    // Extract ticket IDs from selected seats
+    const seatsArray = selectedSeats.map((seat) => seat.ticket_id);
+    
+    // Lock seats for 10 minutes (600 seconds)
+    const lockSeats = await tickets_lock_virtual({ 
+      ticketd_reserved: seatsArray, 
+      reserved_time: 600 
+    });
+    
+    if (lockSeats.data.valido) {
+      // Success - proceed to payment
+      resetStep2Fields();
+      setCheckoutStep("payment");
+      setSubmitConfirmSeat(false);
+      dispatch(setLoadingData({ loading: false }));
+    } else {
+      // Some seats are no longer available
+      setSubmitConfirmSeat(false);
+      dispatch(setLoadingData({ loading: false }));
+      
+      // Show error for each unavailable seat
+      lockSeats.data.nodisponible.forEach((id) => {
+        const ticketsFilter = selectedSeats.filter(
+          (x) => x.ticket_id === id
+        );
+        ticketsFilter.forEach((ticket) => {
+          toast.error(
+            `Lo sentimos, el ticket ${ticket.id} no está disponible. ` +
+            `Por favor seleccione un asiento diferente`,
+            {
+              position: "bottom-center",
+              autoClose: 7000,
+              theme: "light",
+            }
+          );
+        });
+      });
+    }
+  } catch (error) {
+    console.error('Error locking seats:', error);
+    setSubmitConfirmSeat(false);
+    dispatch(setLoadingData({ loading: false }));
+  }
+};
+```
+
+### Response
+
+<ResponseField name="valido" type="boolean">
+  Whether all tickets were successfully locked
+</ResponseField>
+
+<ResponseField name="nodisponible" type="array">
+  Array of ticket IDs that could not be locked (already locked or sold)
+</ResponseField>
+
+<ResponseField name="locked_tickets" type="array">
+  Array of successfully locked ticket IDs
+</ResponseField>
+
+#### Success Response
+
+```json
+{
+  "valido": true,
+  "nodisponible": [],
+  "locked_tickets": ["ticket_abc123", "ticket_def456"]
+}
+```
+
+#### Partial Failure Response
+
+```json
+{
+  "valido": false,
+  "nodisponible": ["ticket_def456"],
+  "locked_tickets": ["ticket_abc123"]
+}
+```
+
+<Warning>
+  If `valido` is false, at least one ticket could not be locked. You must handle this by showing error messages and allowing the user to select different seats.
+</Warning>
+
+<Note>
+  Locked tickets automatically unlock after the specified `reserved_time` expires. Always set a reasonable timeout (typically 10 minutes) to ensure tickets don't remain locked unnecessarily.
+</Note>
+
+---
+
+## tickets_unlock_param_virtual
+
+Unlocks previously locked tickets, making them available for other users. This is typically called when a user goes back to seat selection or abandons the checkout process.
+
+<ParamField path="ticketd_reserved" type="array" required>
+  Array of ticket IDs to unlock
+</ParamField>
+
+### Request Example
+
+```javascript
+import { tickets_unlock_param_virtual } from '@/guards/firebase/firebase';
+
+const seatsArray = selectedSeats.map((seat) => seat.ticket_id);
+
+const unLockSeats = await tickets_unlock_param_virtual({ 
+  ticketd_reserved: seatsArray 
+});
+```
+
+### Complete Usage Example
+
+```javascript
+const ticketsUnlock = async () => {
+  try {
+    setUnlockTicket(true);
+    dispatch(setLoadingData({ loading: true }));
+    
+    // Extract ticket IDs from selected seats
+    const seatsArray = selectedSeats.map((seat) => seat.ticket_id);
+    
+    // Unlock the seats
+    const unLockSeats = await tickets_unlock_param_virtual({ 
+      ticketd_reserved: seatsArray 
+    });
+    
+    if (unLockSeats.data.valido) {
+      // Success - return to seat selection
+      setCheckoutStep("select-seats");
+      setUnlockTicket(false);
+      dispatch(setLoadingData({ loading: false }));
+    } else {
+      // Error unlocking
+      setUnlockTicket(false);
+      dispatch(setLoadingData({ loading: false }));
+      toast.error('Error al desbloquear los asientos');
+    }
+  } catch (error) {
+    console.error('Error unlocking tickets:', error);
+    setUnlockTicket(false);
+    dispatch(setLoadingData({ loading: false }));
+  }
+};
+```
+
+### Response
+
+<ResponseField name="valido" type="boolean">
+  Whether all tickets were successfully unlocked
+</ResponseField>
+
+<ResponseField name="unlocked_tickets" type="array">
+  Array of successfully unlocked ticket IDs
+</ResponseField>
+
+#### Response Example
+
+```json
+{
+  "valido": true,
+  "unlocked_tickets": ["ticket_abc123", "ticket_def456"]
+}
+```
+
+<Note>
+  Always unlock tickets when a user navigates away from the payment step or closes the checkout flow to ensure tickets remain available for other customers.
+</Note>
+
+## Ticket Lifecycle
+
+The typical flow for managing tickets during checkout:
+
+```javascript
+// 1. Load available tickets
+const tickets = await tickets_list_event_sales_virtual({ event_id });
+
+// 2. User selects seats and confirms
+const lockResult = await tickets_lock_virtual({
+  ticketd_reserved: selectedTicketIds,
+  reserved_time: 600
+});
+
+if (lockResult.data.valido) {
+  // 3. Proceed to payment
+  // User completes payment...
+  
+  // 4. Create order (which automatically marks tickets as sold)
+  await order_created(orderData);
+} else {
+  // Handle unavailable tickets
+}
+
+// If user goes back or cancels
+const unlockResult = await tickets_unlock_param_virtual({
+  ticketd_reserved: selectedTicketIds
+});
+```
+
+## Best Practices
+
+### 1. Set Reasonable Lock Times
+
+```javascript
+// Good: 10 minutes is enough time to complete checkout
+const lockSeats = await tickets_lock_virtual({ 
+  ticketd_reserved: seatsArray, 
+  reserved_time: 600 
+});
+
+// Bad: 30 minutes is too long and reduces availability
+const lockSeats = await tickets_lock_virtual({ 
+  ticketd_reserved: seatsArray, 
+  reserved_time: 1800 
+});
+```
+
+### 2. Always Handle Unavailable Tickets
+
+```javascript
+if (!lockSeats.data.valido) {
+  // Show specific error for each unavailable seat
+  lockSeats.data.nodisponible.forEach((ticketId) => {
+    const ticket = selectedSeats.find(s => s.ticket_id === ticketId);
+    toast.error(`Ticket ${ticket.id} is no longer available`);
+  });
+  
+  // Automatically remove unavailable seats from selection
+  setSelectedSeats(prev => 
+    prev.filter(s => !lockSeats.data.nodisponible.includes(s.ticket_id))
+  );
+}
+```
+
+### 3. Unlock on Component Unmount
+
+```javascript
+useEffect(() => {
+  return () => {
+    // Cleanup: unlock tickets when component unmounts
+    if (selectedSeats.length > 0 && checkoutStep === 'payment') {
+      const seatsArray = selectedSeats.map(s => s.ticket_id);
+      tickets_unlock_param_virtual({ ticketd_reserved: seatsArray });
+    }
+  };
+}, [selectedSeats, checkoutStep]);
+```
+
+### 4. Show Lock Timer to User
+
+```javascript
+const [lockTimeRemaining, setLockTimeRemaining] = useState(600);
+
+useEffect(() => {
+  if (checkoutStep === 'payment' && lockTimeRemaining > 0) {
+    const timer = setInterval(() => {
+      setLockTimeRemaining(prev => {
+        if (prev <= 1) {
+          // Time expired - unlock and return to seat selection
+          ticketsUnlock();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    
+    return () => clearInterval(timer);
+  }
+}, [checkoutStep, lockTimeRemaining]);
+
+// Display timer in UI
+<div className="lock-timer">
+  Tiempo restante: {Math.floor(lockTimeRemaining / 60)}:{(lockTimeRemaining % 60).toString().padStart(2, '0')}
+</div>
+```
+
+<Warning>
+  Never proceed to order creation without first successfully locking the tickets. This prevents overselling and ensures data integrity.
+</Warning>
+
+## Error Handling
+
+```javascript
+try {
+  const lockSeats = await tickets_lock_virtual({ 
+    ticketd_reserved: seatsArray, 
+    reserved_time: 600 
+  });
+  
+  if (!lockSeats.data.valido) {
+    throw new Error('Some seats are no longer available');
+  }
+  
+} catch (error) {
+  if (error.code === 'functions/deadline-exceeded') {
+    toast.error('Request timed out. Please try again.');
+  } else if (error.code === 'functions/unavailable') {
+    toast.error('Service temporarily unavailable.');
+  } else {
+    toast.error('Error locking seats. Please try again.');
+  }
+  
+  console.error('Lock error:', error);
+}
+```
+
+## Related Operations
+
+- [Event Operations](/api/event-operations) - Load event data
+- [Firebase Functions](/api/firebase-functions) - Core setup
+- Order creation - After successful payment with locked tickets

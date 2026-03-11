@@ -1,0 +1,480 @@
+---
+title: Form Components
+description: Input, Label, Select, Switch, and Slider components for form building
+---
+
+## Input
+
+A text input component with consistent styling and focus states.
+
+### Import
+
+```javascript
+import { Input } from "@/components/ui/Input"
+```
+
+### Component Source
+
+```javascript
+import * as React from "react"
+import { cn } from "../../utils/cn";
+
+const Input = React.forwardRef(
+    ({ className, type, ...props }, ref) => {
+        return (
+            <input
+                type={type}
+                className={cn(
+                    "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50",
+                    className
+                )}
+                ref={ref}
+                {...props}
+            />
+        )
+    }
+)
+Input.displayName = "Input"
+
+export { Input }
+```
+
+### Usage
+
+<Tabs>
+  <Tab title="Basic">
+    ```jsx
+    <Input type="text" placeholder="Enter your name" />
+    ```
+  </Tab>
+  <Tab title="With Label">
+    ```jsx
+    <div className="space-y-2">
+      <Label htmlFor="email">Email</Label>
+      <Input id="email" type="email" placeholder="[email protected]" />
+    </div>
+    ```
+  </Tab>
+  <Tab title="Disabled">
+    ```jsx
+    <Input type="text" placeholder="Disabled input" disabled />
+    ```
+  </Tab>
+  <Tab title="File Input">
+    ```jsx
+    <Input type="file" />
+    ```
+  </Tab>
+</Tabs>
+
+### Props
+
+- All standard HTML input attributes
+- `className` - Additional CSS classes
+- `type` - Input type (text, email, password, file, etc.)
+- `disabled` - Disables the input
+- `ref` - Forwarded ref to the input element
+
+---
+
+## Label
+
+An accessible label component built on Radix UI Label primitive.
+
+### Import
+
+```javascript
+import { Label } from "@/components/ui/Label"
+```
+
+### Component Source
+
+```javascript
+import * as React from "react"
+import * as LabelPrimitive from "@radix-ui/react-label"
+import { cva } from "class-variance-authority"
+import { cn } from "../../utils/cn";
+
+const labelVariants = cva(
+    "text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+)
+
+const Label = React.forwardRef(({ className, ...props }, ref) => (
+    <LabelPrimitive.Root
+        ref={ref}
+        className={cn(labelVariants(), className)}
+        {...props}
+    />
+))
+Label.displayName = LabelPrimitive.Root.displayName
+
+export { Label }
+```
+
+### Usage
+
+```jsx
+<Label htmlFor="username">Username</Label>
+<Input id="username" type="text" />
+```
+
+### Features
+
+- Automatically associates with form controls via `htmlFor`
+- Peer disabled states (uses Tailwind's `peer-disabled:` utilities)
+- Full accessibility support via Radix UI
+
+---
+
+## Select
+
+A custom select dropdown built on Radix UI Select primitive.
+
+### Import
+
+```javascript
+import {
+  Select,
+  SelectTrigger,
+  SelectContent,
+  SelectItem,
+  SelectValue,
+  SelectGroup,
+  SelectLabel,
+  SelectSeparator,
+} from "@/components/ui/Select"
+```
+
+### Component Architecture
+
+The Select component is composed of multiple parts:
+
+- `Select` - Root component (Radix SelectPrimitive.Root)
+- `SelectTrigger` - Button that opens the dropdown
+- `SelectContent` - Dropdown content (portaled)
+- `SelectItem` - Individual select option
+- `SelectValue` - Displays selected value
+- `SelectGroup` - Groups related options
+- `SelectLabel` - Label for option groups
+- `SelectSeparator` - Visual separator between options
+
+### Usage
+
+<Tabs>
+  <Tab title="Basic">
+    ```jsx
+    <Select>
+      <SelectTrigger className="w-[180px]">
+        <SelectValue placeholder="Select a fruit" />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value="apple">Apple</SelectItem>
+        <SelectItem value="banana">Banana</SelectItem>
+        <SelectItem value="orange">Orange</SelectItem>
+      </SelectContent>
+    </Select>
+    ```
+  </Tab>
+  <Tab title="With Groups">
+    ```jsx
+    <Select>
+      <SelectTrigger className="w-[200px]">
+        <SelectValue placeholder="Select currency" />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectGroup>
+          <SelectLabel>Fiat</SelectLabel>
+          <SelectItem value="usd">USD</SelectItem>
+          <SelectItem value="eur">EUR</SelectItem>
+          <SelectItem value="gbp">GBP</SelectItem>
+        </SelectGroup>
+        <SelectSeparator />
+        <SelectGroup>
+          <SelectLabel>Crypto</SelectLabel>
+          <SelectItem value="btc">Bitcoin</SelectItem>
+          <SelectItem value="eth">Ethereum</SelectItem>
+        </SelectGroup>
+      </SelectContent>
+    </Select>
+    ```
+  </Tab>
+  <Tab title="Controlled">
+    ```jsx
+    const [value, setValue] = useState("")
+
+    <Select value={value} onValueChange={setValue}>
+      <SelectTrigger className="w-[180px]">
+        <SelectValue placeholder="Select status" />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value="pending">Pending</SelectItem>
+        <SelectItem value="approved">Approved</SelectItem>
+        <SelectItem value="rejected">Rejected</SelectItem>
+      </SelectContent>
+    </Select>
+    ```
+  </Tab>
+</Tabs>
+
+### Features
+
+- **Keyboard navigation** - Arrow keys, Enter, Escape
+- **Search** - Type to filter options
+- **Portal rendering** - Content renders in a portal to avoid z-index issues
+- **Scroll buttons** - Automatic scroll indicators for long lists
+- **Animations** - Smooth open/close animations
+- **Icons** - Chevron indicator and check mark for selected items
+
+---
+
+## Switch
+
+A toggle switch component built on Radix UI Switch primitive.
+
+### Import
+
+```javascript
+import { Switch } from "@/components/ui/Switch"
+```
+
+### Component Source
+
+```javascript
+import * as React from "react"
+import * as SwitchPrimitives from "@radix-ui/react-switch"
+import { cn } from "../../utils/cn";
+
+const Switch = React.forwardRef(({ className, ...props }, ref) => (
+  <SwitchPrimitives.Root
+    className={cn(
+      "peer inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-50 data-[state=checked]:bg-primary data-[state=unchecked]:bg-input",
+      className
+    )}
+    {...props}
+    ref={ref}
+  >
+    <SwitchPrimitives.Thumb
+      className={cn(
+        "pointer-events-none block h-5 w-5 rounded-full bg-background shadow-lg ring-0 transition-transform data-[state=checked]:translate-x-5 data-[state=unchecked]:translate-x-0"
+      )}
+    />
+  </SwitchPrimitives.Root>
+))
+Switch.displayName = SwitchPrimitives.Root.displayName
+
+export { Switch }
+```
+
+### Usage
+
+<Tabs>
+  <Tab title="Basic">
+    ```jsx
+    <Switch />
+    ```
+  </Tab>
+  <Tab title="With Label">
+    ```jsx
+    <div className="flex items-center space-x-2">
+      <Switch id="airplane-mode" />
+      <Label htmlFor="airplane-mode">Airplane Mode</Label>
+    </div>
+    ```
+  </Tab>
+  <Tab title="Controlled">
+    ```jsx
+    const [enabled, setEnabled] = useState(false)
+
+    <div className="flex items-center space-x-2">
+      <Switch 
+        id="notifications" 
+        checked={enabled} 
+        onCheckedChange={setEnabled}
+      />
+      <Label htmlFor="notifications">
+        {enabled ? "Enabled" : "Disabled"}
+      </Label>
+    </div>
+    ```
+  </Tab>
+  <Tab title="Disabled">
+    ```jsx
+    <Switch disabled />
+    ```
+  </Tab>
+</Tabs>
+
+### Props
+
+- `checked` - Controlled state
+- `onCheckedChange` - Callback when state changes
+- `disabled` - Disables the switch
+- `className` - Additional CSS classes
+- `ref` - Forwarded ref
+
+---
+
+## Slider
+
+A range slider component built on Radix UI Slider primitive.
+
+### Import
+
+```javascript
+import { Slider } from "@/components/ui/Slider"
+```
+
+### Component Source
+
+```javascript
+import * as React from "react"
+import * as SliderPrimitive from "@radix-ui/react-slider"
+import { cn } from "../../utils/cn";
+
+const Slider = React.forwardRef(({ className, ...props }, ref) => (
+  <SliderPrimitive.Root
+    ref={ref}
+    className={cn(
+      "relative flex w-full touch-none select-none items-center",
+      className
+    )}
+    {...props}
+  >
+    <SliderPrimitive.Track className="relative h-1.5 w-full grow overflow-hidden rounded-full bg-primary/20">
+      <SliderPrimitive.Range className="absolute h-full bg-primary" />
+    </SliderPrimitive.Track>
+    <SliderPrimitive.Thumb className="block h-4 w-4 rounded-full border border-primary/50 bg-background shadow transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50" />
+  </SliderPrimitive.Root>
+))
+Slider.displayName = SliderPrimitive.Root.displayName
+
+export { Slider }
+```
+
+### Usage
+
+<Tabs>
+  <Tab title="Basic">
+    ```jsx
+    <Slider defaultValue={[50]} max={100} step={1} />
+    ```
+  </Tab>
+  <Tab title="With Label">
+    ```jsx
+    const [value, setValue] = useState([50])
+
+    <div className="space-y-2">
+      <div className="flex justify-between">
+        <Label>Volume</Label>
+        <span className="text-sm text-muted-foreground">{value[0]}%</span>
+      </div>
+      <Slider 
+        value={value} 
+        onValueChange={setValue}
+        max={100} 
+        step={1} 
+      />
+    </div>
+    ```
+  </Tab>
+  <Tab title="Range">
+    ```jsx
+    <Slider defaultValue={[20, 80]} max={100} step={1} />
+    ```
+  </Tab>
+  <Tab title="Custom Steps">
+    ```jsx
+    <Slider 
+      defaultValue={[1000]} 
+      min={0} 
+      max={10000} 
+      step={100}
+      className="w-[60%]"
+    />
+    ```
+  </Tab>
+</Tabs>
+
+### Props
+
+- `defaultValue` - Array of initial values `[50]` or `[20, 80]` for range
+- `value` - Controlled value
+- `onValueChange` - Callback with new value(s)
+- `min` - Minimum value (default: 0)
+- `max` - Maximum value (default: 100)
+- `step` - Step increment (default: 1)
+- `disabled` - Disables the slider
+- `className` - Additional CSS classes
+
+## Complete Form Example
+
+Here's a complete form combining all form components:
+
+```jsx
+import { Card, CardHeader, CardTitle, CardContent, CardFooter } from "@/components/ui/Card"
+import { Label } from "@/components/ui/Label"
+import { Input } from "@/components/ui/Input"
+import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui/Select"
+import { Switch } from "@/components/ui/Switch"
+import { Slider } from "@/components/ui/Slider"
+import { Button } from "@/components/ui/Button"
+
+function TransactionForm() {
+  const [amount, setAmount] = useState([1000])
+  const [autoApprove, setAutoApprove] = useState(false)
+
+  return (
+    <Card className="w-[450px]">
+      <CardHeader>
+        <CardTitle>New Transaction</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="space-y-2">
+          <Label htmlFor="account">Account</Label>
+          <Input id="account" placeholder="Enter account number" />
+        </div>
+        
+        <div className="space-y-2">
+          <Label htmlFor="currency">Currency</Label>
+          <Select>
+            <SelectTrigger id="currency">
+              <SelectValue placeholder="Select currency" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="usd">USD</SelectItem>
+              <SelectItem value="eur">EUR</SelectItem>
+              <SelectItem value="gbp">GBP</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="space-y-2">
+          <div className="flex justify-between">
+            <Label>Amount</Label>
+            <span className="text-sm">${amount[0]}</span>
+          </div>
+          <Slider 
+            value={amount}
+            onValueChange={setAmount}
+            min={0}
+            max={10000}
+            step={100}
+          />
+        </div>
+
+        <div className="flex items-center space-x-2">
+          <Switch 
+            id="auto-approve" 
+            checked={autoApprove}
+            onCheckedChange={setAutoApprove}
+          />
+          <Label htmlFor="auto-approve">Auto-approve transaction</Label>
+        </div>
+      </CardContent>
+      <CardFooter>
+        <Button className="w-full">Submit Transaction</Button>
+      </CardFooter>
+    </Card>
+  )
+}
+```

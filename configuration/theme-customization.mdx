@@ -1,0 +1,620 @@
+---
+title: 'Theme Customization'
+description: 'Customize the appearance and branding of TradeMaster Transactions Portales'
+icon: 'palette'
+---
+
+## Overview
+
+TradeMaster Transactions Portales provides extensive theming capabilities through Tailwind CSS, CSS variables, and a dynamic theme provider. You can customize colors, spacing, typography, and portal-specific branding.
+
+## Theme Architecture
+
+The theme system consists of three main components:
+
+1. **Tailwind Configuration** - Base design system tokens
+2. **CSS Variables** - Runtime color customization
+3. **Theme Provider** - Dynamic portal-specific themes
+
+## Tailwind Configuration
+
+The application uses Tailwind CSS with custom extensions defined in `tailwind.config.js`:
+
+```javascript tailwind.config.js
+export default {
+  darkMode: ["class"],
+  content: [
+    './index.html',
+    './src/**/*.{vue,js,ts,jsx,tsx}',
+    './node_modules/primereact/**/*.{js,ts,jsx,tsx}',
+  ],
+  theme: {
+    container: {
+      center: true,
+      padding: "2rem",
+      screens: {
+        "2xl": "1400px",
+      },
+    },
+    extend: {
+      colors: {
+        border: "hsl(var(--border))",
+        input: "hsl(var(--input))",
+        ring: "hsl(var(--ring))",
+        background: "hsl(var(--background))",
+        foreground: "hsl(var(--foreground))",
+        primary: {
+          DEFAULT: "hsl(var(--primary))",
+          foreground: "hsl(var(--primary-foreground))",
+        },
+        secondary: {
+          DEFAULT: "hsl(var(--secondary))",
+          foreground: "hsl(var(--secondary-foreground))",
+        },
+        destructive: {
+          DEFAULT: "hsl(var(--destructive))",
+          foreground: "hsl(var(--destructive-foreground))",
+        },
+        muted: {
+          DEFAULT: "hsl(var(--muted))",
+          foreground: "hsl(var(--muted-foreground))",
+        },
+        accent: {
+          DEFAULT: "hsl(var(--accent))",
+          foreground: "hsl(var(--accent-foreground))",
+        },
+        popover: {
+          DEFAULT: "hsl(var(--popover))",
+          foreground: "hsl(var(--popover-foreground))",
+        },
+        card: {
+          DEFAULT: "hsl(var(--card))",
+          foreground: "hsl(var(--card-foreground))",
+        },
+      },
+      keyframes: {
+        "accordion-down": {
+          from: { height: "0" },
+          to: { height: "var(--radix-accordion-content-height)" },
+        },
+        "accordion-up": {
+          from: { height: "var(--radix-accordion-content-height)" },
+          to: { height: "0" },
+        },
+      },
+      animation: {
+        "accordion-down": "accordion-down 0.2s ease-out",
+        "accordion-up": "accordion-up 0.2s ease-out",
+      },
+    },
+  },
+  plugins: [
+    require('tailwindcss-animated'),
+    require('@tailwindcss/forms'),
+    require("tailwindcss-animate")
+  ],
+}
+```
+
+### Key Configuration Features
+
+<AccordionGroup>
+  <Accordion title="Dark Mode Support">
+    Dark mode is enabled using the `class` strategy, allowing you to toggle dark mode by adding the `dark` class to the root element.
+    
+    ```javascript
+    // Toggle dark mode
+    document.documentElement.classList.toggle('dark');
+    ```
+  </Accordion>
+
+  <Accordion title="Responsive Container">
+    The container is automatically centered with responsive padding and a maximum width of 1400px for large screens.
+  </Accordion>
+
+  <Accordion title="Color System">
+    All colors use HSL format with CSS variables, enabling runtime color customization without rebuilding.
+  </Accordion>
+
+  <Accordion title="Animation Support">
+    Built-in animations for accordions and other interactive components using Tailwind's animation utilities.
+  </Accordion>
+</AccordionGroup>
+
+## CSS Variables
+
+The base color scheme is defined in `src/index.css` using CSS custom properties:
+
+```css src/index.css
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 222.2 47.4% 11.2%;
+
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 47.4% 11.2%;
+
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 47.4% 11.2%;
+
+    --primary: var(--color-primary);
+    --primary-foreground: 210 40% 98%;
+
+    --secondary: var(--color-secondary);
+    --secondary-foreground: 222.2 47.4% 11.2%;
+
+    --accent: 210 40% 96.1%;
+    --accent-foreground: 222.2 47.4% 11.2%;
+
+    --destructive: 0 100% 50%;
+    --destructive-foreground: 210 40% 98%;
+
+    --ring: 215 20.2% 65.1%;
+    --radius: 0.5rem;
+  }
+
+  .dark {
+    --background: 224 71% 4%;
+    --foreground: 213 31% 91%;
+
+    --muted: 223 47% 11%;
+    --muted-foreground: 215.4 16.3% 56.9%;
+
+    --accent: 216 34% 17%;
+    --accent-foreground: 210 40% 98%;
+
+    --popover: 224 71% 4%;
+    --popover-foreground: 215 20.2% 65.1%;
+
+    --border: 216 34% 17%;
+    --input: 216 34% 17%;
+
+    --card: 224 71% 4%;
+    --card-foreground: 213 31% 91%;
+
+    --primary: var(--color-primary);
+    --primary-foreground: 210 40% 98%;
+
+    --secondary: var(--color-secondary);
+    --secondary-foreground: 210 40% 98%;
+
+    --destructive: 0 63% 31%;
+    --destructive-foreground: 210 40% 98%;
+
+    --ring: 216 34% 17%;
+    --radius: 0.5rem;
+  }
+}
+```
+
+### Color Format (HSL)
+
+All colors use HSL (Hue, Saturation, Lightness) format:
+
+- **Hue**: 0-360 (color wheel position)
+- **Saturation**: 0-100% (color intensity)
+- **Lightness**: 0-100% (brightness)
+
+**Example:**
+```css
+--primary: 220 70% 50%; /* Blue color */
+```
+
+Use with `hsl()` function:
+```css
+color: hsl(var(--primary));
+```
+
+## Dynamic Theme Provider
+
+The `ThemeProvider` component enables portal-specific color customization at runtime:
+
+```jsx src/components/ThemeProvider.jsx
+import { useEffect } from 'react';
+import { useSelector } from 'react-redux';
+
+const ThemeProvider = ({ children }) => {
+  const setup = useSelector((state) => state.setup.Setup.metadata);
+
+  useEffect(() => {
+    if (setup?.color_primary && setup?.color_secondary) {
+      // Update CSS custom properties
+      document.documentElement.style.setProperty('--color-primary', setup.color_primary);
+      document.documentElement.style.setProperty('--color-secondary', setup.color_secondary);
+      
+      // Convert HEX to HSL for Tailwind
+      const primaryHSL = hexToHSL(setup.color_primary);
+      const secondaryHSL = hexToHSL(setup.color_secondary);
+      
+      document.documentElement.style.setProperty('--primary', primaryHSL);
+      document.documentElement.style.setProperty('--secondary', secondaryHSL);
+      
+      // Update foreground colors
+      document.documentElement.style.setProperty('--primary-foreground', '255 255 255');
+      document.documentElement.style.setProperty('--secondary-foreground', '255 255 255');
+    }
+  }, [setup?.color_primary, setup?.color_secondary]);
+
+  return children;
+};
+
+// Convert HEX to HSL
+function hexToHSL(hex) {
+  hex = hex.replace('#', '');
+  
+  const r = parseInt(hex.substring(0, 2), 16) / 255;
+  const g = parseInt(hex.substring(2, 4), 16) / 255;
+  const b = parseInt(hex.substring(4, 6), 16) / 255;
+
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  let h, s, l = (max + min) / 2;
+
+  if (max === min) {
+    h = s = 0;
+  } else {
+    const d = max - min;
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    
+    switch (max) {
+      case r: h = (g - b) / d + (g < b ? 6 : 0); break;
+      case g: h = (b - r) / d + 2; break;
+      case b: h = (r - g) / d + 4; break;
+    }
+    
+    h /= 6;
+  }
+
+  h = Math.round(h * 360);
+  s = Math.round(s * 100);
+  l = Math.round(l * 100);
+
+  return `${h} ${s}% ${l}%`;
+}
+
+export default ThemeProvider;
+```
+
+### How It Works
+
+<Steps>
+  <Step title="Portal Configuration Loaded">
+    When a portal is accessed, its configuration (including `color_primary` and `color_secondary`) is loaded from Redux state.
+  </Step>
+
+  <Step title="Colors Applied Dynamically">
+    The `ThemeProvider` watches for color changes and updates CSS variables in real-time.
+  </Step>
+
+  <Step title="Automatic Conversion">
+    HEX colors from the database are automatically converted to HSL format for Tailwind compatibility.
+  </Step>
+
+  <Step title="UI Updates Instantly">
+    All components using `primary` or `secondary` colors update without page refresh.
+  </Step>
+</Steps>
+
+## Portal-Specific Theming
+
+Each portal can have unique branding stored in Firestore:
+
+```javascript
+// Portal configuration in Firestore
+{
+  metadata: {
+    color_primary: "#3B82F6",    // Blue
+    color_secondary: "#8B5CF6",  // Purple
+    portal_name: "Event Portal",
+    logo_url: "https://..."
+  }
+}
+```
+
+The theme automatically applies when the portal loads.
+
+## Custom CSS Classes
+
+The application includes custom utility classes:
+
+```css
+@layer components {
+  .h-navbar {
+    height: calc(100vh - 64px);
+  }
+
+  .form-input {
+    @apply border border-gray-400 rounded bg-white w-full;
+  }
+
+  .form-group {
+    @apply relative;
+  }
+
+  .btn-secondary {
+    @apply w-full flex justify-center items-center px-4 py-2 
+           border border-gray-300 shadow-sm text-sm font-medium 
+           rounded-md text-gray-700 bg-white 
+           enabled:hover:bg-gray-50 disabled:bg-gray-50;
+  }
+
+  .card {
+    @apply m-6 bg-white overflow-hidden shadow rounded-lg 
+           divide-y divide-gray-200;
+  }
+
+  .alert {
+    @apply m-6 rounded-md;
+  }
+  
+  .alert span {
+    @apply block m-4;
+  }
+  
+  .alert-yellow {
+    @apply bg-gray-100 border border-gray-600 text-gray-600;
+  }
+  
+  .alert-yellow .alert-progress {
+    @apply bg-gray-600 h-1.5 rounded-full;
+  }
+}
+```
+
+## Branding Assets
+
+### Favicon
+
+The favicon is located at `public/favicon.svg` and referenced in `index.html`:
+
+```html index.html
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>TradeMasterTransactions</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>
+```
+
+**To customize:**
+1. Replace `public/favicon.svg` with your logo
+2. Ensure it's an SVG for best quality at all sizes
+3. Alternatively, use PNG: `favicon.png` (recommended: 32x32 or 64x64)
+
+### Logo
+
+Portal-specific logos are stored in Firebase Storage and referenced in the portal configuration:
+
+```javascript
+// Store logo URL in portal metadata
+const portalConfig = {
+  metadata: {
+    logo_url: "https://firebasestorage.googleapis.com/.../logo.png"
+  }
+};
+```
+
+Display the logo in your components:
+```jsx
+import { useSelector } from 'react-redux';
+
+const Header = () => {
+  const setup = useSelector((state) => state.setup.Setup.metadata);
+  
+  return (
+    <img 
+      src={setup?.logo_url} 
+      alt={setup?.portal_name}
+      className="h-12"
+    />
+  );
+};
+```
+
+## Customizing Colors
+
+### Option 1: Update Portal Configuration
+
+The easiest way to change colors is through the portal configuration in Firestore:
+
+```javascript
+import { db } from './guards/firebase/firebase';
+import { doc, updateDoc } from 'firebase/firestore';
+
+const updatePortalColors = async (portalId, colors) => {
+  const portalRef = doc(db, 'portals', portalId);
+  await updateDoc(portalRef, {
+    'metadata.color_primary': colors.primary,
+    'metadata.color_secondary': colors.secondary
+  });
+};
+
+// Usage
+await updatePortalColors('portal-123', {
+  primary: '#3B82F6',   // Blue
+  secondary: '#10B981'  // Green
+});
+```
+
+### Option 2: Modify CSS Variables
+
+For global changes, edit `src/index.css`:
+
+```css
+:root {
+  /* Change these values */
+  --primary: 220 70% 50%;        /* Blue */
+  --secondary: 142 76% 36%;      /* Green */
+  --accent: 24 95% 53%;          /* Orange */
+}
+```
+
+### Option 3: Override in Tailwind Config
+
+Add custom colors to `tailwind.config.js`:
+
+```javascript
+theme: {
+  extend: {
+    colors: {
+      brand: {
+        primary: '#3B82F6',
+        secondary: '#10B981',
+        accent: '#F59E0B'
+      }
+    }
+  }
+}
+```
+
+Use in components:
+```jsx
+<button className="bg-brand-primary text-white">
+  Click me
+</button>
+```
+
+## Typography Customization
+
+The application uses system fonts by default. To customize:
+
+```javascript tailwind.config.js
+theme: {
+  extend: {
+    fontFamily: {
+      sans: ['Inter', 'system-ui', 'sans-serif'],
+      heading: ['Poppins', 'sans-serif'],
+    }
+  }
+}
+```
+
+Import fonts in `src/index.css`:
+```css
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@600;700&display=swap');
+```
+
+## Dark Mode Implementation
+
+<Steps>
+  <Step title="Create Dark Mode Toggle">
+    ```jsx
+    import { useState, useEffect } from 'react';
+    
+    const DarkModeToggle = () => {
+      const [isDark, setIsDark] = useState(false);
+      
+      useEffect(() => {
+        const isDarkMode = document.documentElement.classList.contains('dark');
+        setIsDark(isDarkMode);
+      }, []);
+      
+      const toggleDarkMode = () => {
+        document.documentElement.classList.toggle('dark');
+        setIsDark(!isDark);
+        localStorage.setItem('darkMode', !isDark);
+      };
+      
+      return (
+        <button onClick={toggleDarkMode}>
+          {isDark ? '🌞 Light' : '🌙 Dark'}
+        </button>
+      );
+    };
+    ```
+  </Step>
+
+  <Step title="Persist Dark Mode Preference">
+    ```javascript
+    // In your root component or App.jsx
+    useEffect(() => {
+      const darkMode = localStorage.getItem('darkMode') === 'true';
+      if (darkMode) {
+        document.documentElement.classList.add('dark');
+      }
+    }, []);
+    ```
+  </Step>
+
+  <Step title="Use Dark Mode Classes">
+    ```jsx
+    <div className="bg-white dark:bg-gray-900 text-black dark:text-white">
+      Content adapts to theme
+    </div>
+    ```
+  </Step>
+</Steps>
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Use Semantic Colors" icon="palette">
+    Use semantic color names (`primary`, `secondary`) instead of specific colors (`blue`, `red`) for flexibility
+  </Card>
+  
+  <Card title="Maintain Contrast" icon="eye">
+    Ensure sufficient contrast between text and backgrounds (WCAG AA: 4.5:1 minimum)
+  </Card>
+  
+  <Card title="Test Dark Mode" icon="moon">
+    Always test your customizations in both light and dark modes
+  </Card>
+  
+  <Card title="Responsive Design" icon="mobile">
+    Use Tailwind's responsive utilities to adapt themes for different screen sizes
+  </Card>
+</CardGroup>
+
+## Troubleshooting
+
+### Colors Not Updating
+
+**Problem**: Changed CSS variables but colors remain the same
+
+**Solution**: 
+1. Clear browser cache
+2. Rebuild the application: `npm run build`
+3. Check browser DevTools to verify CSS variables are applied
+
+### Theme Provider Not Working
+
+**Problem**: Portal colors not applying dynamically
+
+**Solution**:
+1. Verify `ThemeProvider` wraps your app in the component tree
+2. Check Redux state contains `color_primary` and `color_secondary`
+3. Ensure portal configuration is loaded before rendering
+
+### Dark Mode Not Toggling
+
+**Problem**: Dark mode toggle doesn't change appearance
+
+**Solution**:
+1. Verify `darkMode: ["class"]` is set in `tailwind.config.js`
+2. Check that `dark:` variants are used in your components
+3. Ensure CSS variables are defined for both `:root` and `.dark`
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Component Library" icon="puzzle-piece" href="/components/overview">
+    Explore themed UI components
+  </Card>
+  <Card title="Multi-Tenant Config" icon="building" href="/features/multi-tenant">
+    Learn how to manage portal configurations
+  </Card>
+</CardGroup>
