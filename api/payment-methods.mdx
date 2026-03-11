@@ -359,6 +359,79 @@ Same structure as `api_mercantil_tdc_pay` response, with `payment_method` set to
   Debit card payments require two steps: First authenticate with `api_mercantil_auth`, then process payment with `api_mercantil_tdd_pay` using the `twofactor_auth` token.
 </Note>
 
+### api_mercantil_c2p_auth
+
+Initiates authentication for C2P (Client-to-Person) Pago Móvil transactions through Mercantil Bank. This function generates a two-factor authentication token required for completing C2P payments.
+
+<ParamField path="amount" type="number" required>
+  Payment amount in Venezuelan Bolívares (VES)
+</ParamField>
+
+<ParamField path="invoice_number" type="string" required>
+  Unique invoice number for the transaction
+</ParamField>
+
+<ParamField path="destination_bank_id" type="string" required>
+  Destination bank code (e.g., "0105" for Mercantil)
+</ParamField>
+
+<ParamField path="destination_id" type="string" required>
+  Destination identification number
+</ParamField>
+
+<ParamField path="destination_mobile_number" type="string" required>
+  Destination mobile phone number (10 digits, no country code)
+</ParamField>
+
+<ParamField path="origin_mobile_number" type="string" required>
+  Origin mobile phone number (10 digits, no country code)
+</ParamField>
+
+<ParamField path="ipaddress" type="string" required>
+  Customer's IP address
+</ParamField>
+
+#### Request Example
+
+```javascript
+import { api_mercantil_c2p_auth } from '@/guards/firebase/firebase';
+
+const authResponse = await api_mercantil_c2p_auth({
+  amount: 5000,
+  invoice_number: "INV1234567890",
+  destination_bank_id: "0105",
+  destination_id: "J506143755",
+  destination_mobile_number: "4142087552",
+  origin_mobile_number: "4241234567",
+  ipaddress: "192.168.1.1"
+});
+```
+
+#### Response
+
+<ResponseField name="success" type="boolean">
+  Whether the authentication was successful
+</ResponseField>
+
+<ResponseField name="twofactor_auth" type="string">
+  Two-factor authentication token to be used in `api_mercantil_c2p_pay`
+</ResponseField>
+
+<ResponseField name="error" type="string">
+  Error message if authentication failed
+</ResponseField>
+
+```json
+{
+  "success": true,
+  "twofactor_auth": "abc123xyz456"
+}
+```
+
+<Note>
+  C2P payments require two steps: First authenticate with `api_mercantil_c2p_auth` to get a `twofactor_auth` token, then process payment with `api_mercantil_c2p_pay` using that token.
+</Note>
+
 ### api_mercantil_c2p_pay
 
 Processes a C2P (Client-to-Person) Pago Móvil payment through Mercantil Bank.

@@ -1,0 +1,318 @@
+---
+title: 'Contact View'
+description: 'Contact form and company information display'
+icon: 'envelope'
+---
+
+## Overview
+
+The Contact view (`src/views/contact/Contact.js`) provides a comprehensive contact interface for users to get in touch with the event organization. It combines a contact form with company information, social media links, location map, and FAQs.
+
+## Route Information
+
+**Path**: `/contacto`  
+**Layout**: `FullLayout`  
+**Authentication**: Public (no auth required)  
+**Guard**: None
+
+From `src/routes/router.js:37`:
+
+```javascript
+{ path: "/contacto", element: <Contact /> }
+```
+
+## Component Structure
+
+The Contact view includes several sections:
+
+### 1. Hero Banner
+
+A gradient banner with the page title and description.
+
+### 2. Contact Information Card
+
+Displays company contact details from the portal's metadata:
+- Phone number with schedule
+- Email addresses
+- Office address
+- Social media links (Facebook, Instagram, Twitter/X, YouTube)
+
+### 3. Contact Form
+
+A fully validated form with the following fields:
+- **Name** (required)
+- **Email** (required with format validation)
+- **Phone** (optional)
+- **Subject** (required)
+- **Message** (required, textarea)
+
+### 4. Location Map
+
+Embedded Google Maps iframe showing the organization's location (if coordinates are configured).
+
+### 5. FAQs Section
+
+Displays frequently asked questions configured in the portal metadata.
+
+## State Management
+
+The component uses Redux for:
+
+```javascript
+const dispatch = useDispatch();
+const setup = useSelector((state) => state.setup.Setup);
+```
+
+- `setup.Setup` - Portal configuration with contact information, social links, location, and FAQs
+
+## Form Handling
+
+### Form State
+
+```javascript
+const [formData, setFormData] = useState({
+  name: '',
+  email: '',
+  phone: '',
+  subject: '',
+  message: ''
+});
+
+const [errors, setErrors] = useState({});
+```
+
+### Validation Logic
+
+From `src/views/contact/Contact.js:41-64`:
+
+```javascript
+const validateForm = () => {
+  const newErrors = {};
+
+  if (!formData.name.trim()) {
+    newErrors.name = 'El nombre es requerido';
+  }
+
+  if (!formData.email.trim()) {
+    newErrors.email = 'El correo electrónico es requerido';
+  } else if (!/\S+@\S+\.\S+/.test(formData.email)) {
+    newErrors.email = 'El correo electrónico no es válido';
+  }
+
+  if (!formData.subject.trim()) {
+    newErrors.subject = 'El asunto es requerido';
+  }
+
+  if (!formData.message.trim()) {
+    newErrors.message = 'El mensaje es requerido';
+  }
+
+  setErrors(newErrors);
+  return Object.keys(newErrors).length === 0;
+};
+```
+
+### Form Submission
+
+From `src/views/contact/Contact.js:66-96`:
+
+```javascript
+const handleSubmit = (e) => {
+  e.preventDefault();
+
+  if (validateForm()) {
+    dispatch(setLoadingData({ loading: true }));
+
+    // Simulates form submission
+    setTimeout(() => {
+      dispatch(setLoadingData({ loading: false }));
+      toast.success("Mensaje enviado correctamente. Nos pondremos en contacto contigo pronto.", {
+        position: "bottom-center",
+        autoClose: 5000,
+        hideProgressBar: false,
+        closeOnClick: true,
+        pauseOnHover: true,
+        draggable: true,
+        progress: undefined,
+        theme: "light",
+      });
+
+      // Reset form
+      setFormData({
+        name: '',
+        email: '',
+        phone: '',
+        subject: '',
+        message: ''
+      });
+    }, 1500);
+  }
+};
+```
+
+<Note>
+  The current implementation simulates email sending. In a production environment, this should be replaced with a Firebase Cloud Function call to `send_email` or an email service integration.
+</Note>
+
+## Portal Configuration Requirements
+
+The Contact view relies on portal metadata configured in Firestore:
+
+### Contact Information Structure
+
+```javascript
+setup.metadata.contact_info = {
+  phone: {
+    number: "+58 XXX XXX XXXX",
+    schedule: {
+      days: ["Lunes - Viernes"],
+      startTime: "9:00 AM",
+      endTime: "5:00 PM"
+    }
+  },
+  emails: ["contact@example.com", "support@example.com"],
+  main_office: "Street Address, City, Country"
+}
+```
+
+### Social Media Configuration
+
+```javascript
+setup.metadata.social_facebook = "https://facebook.com/..."
+setup.metadata.social_instagram = "https://instagram.com/..."
+setup.metadata.social_x = "https://x.com/..."
+setup.metadata.social_youtube = "https://youtube.com/..."
+```
+
+### Location Configuration
+
+```javascript
+setup.location = {
+  latitude: 10.4806,
+  longitude: -66.9036
+}
+```
+
+### FAQs Configuration
+
+```javascript
+setup.faqs = [
+  {
+    question: "¿Cómo puedo comprar tickets?",
+    answer: "Puedes comprar tickets directamente desde nuestra página de eventos..."
+  },
+  {
+    question: "¿Qué métodos de pago aceptan?",
+    answer: "Aceptamos Stripe, tarjetas Mercantil, y Pago Móvil..."
+  }
+]
+```
+
+## UI Components Used
+
+- `<Card>` and `<CardContent>` - Wrappers for content sections
+- `<Input>` - Text input fields
+- `<Label>` - Form field labels
+- `<Button>` - Submit button
+- Icons from `lucide-react`:
+  - `<Building>` - Office location
+  - `<Mail>` - Email addresses
+  - `<Phone>` - Phone numbers
+  - `<User>` - Name field
+  - `<MessageSquare>` - Subject field
+
+## Google Maps Integration
+
+The component embeds a Google Maps iframe showing the office location:
+
+```javascript
+<iframe
+  src={`https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3000!2d${setup.location.longitude}!3d${setup.location.latitude}!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x0%3A0x0!2zM!5e0!3m2!1ses!2s!4v1627388999999!5m2!1ses!2s`}
+  width="100%"
+  height="450"
+  style={{ border: 0 }}
+  allowFullScreen=""
+  loading="lazy"
+  title="Mapa de ubicación"
+></iframe>
+```
+
+## Responsive Design
+
+The layout uses Tailwind CSS grid system:
+
+```javascript
+<div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+  {/* Contact info - 1 column on large screens */}
+  <div className="lg:col-span-1">
+    {/* Contact Information Card */}
+  </div>
+
+  {/* Contact form - 2 columns on large screens */}
+  <div className="lg:col-span-2">
+    {/* Contact Form */}
+  </div>
+</div>
+```
+
+## Enhancement Opportunities
+
+<Warning>
+  The contact form currently uses a simulated submission (setTimeout). For production use, implement actual email sending via:
+</Warning>
+
+1. **Firebase Cloud Function Integration**
+
+```javascript
+import { send_email } from '../../guards/firebase/firebase';
+
+const handleSubmit = async (e) => {
+  e.preventDefault();
+  
+  if (validateForm()) {
+    dispatch(setLoadingData({ loading: true }));
+    
+    try {
+      await send_email({
+        to: setup.metadata.contact_info.emails[0],
+        subject: `Contact Form: ${formData.subject}`,
+        message: `
+          Name: ${formData.name}
+          Email: ${formData.email}
+          Phone: ${formData.phone || 'N/A'}
+          
+          Message:
+          ${formData.message}
+        `
+      });
+      
+      toast.success("Mensaje enviado correctamente.");
+      setFormData({ name: '', email: '', phone: '', subject: '', message: '' });
+    } catch (error) {
+      toast.error("Error al enviar el mensaje. Intenta nuevamente.");
+    } finally {
+      dispatch(setLoadingData({ loading: false }));
+    }
+  }
+};
+```
+
+2. **Email Service Integration** - SendGrid, Mailgun, or AWS SES
+3. **CRM Integration** - Store inquiries in Firestore for tracking
+
+## Related Documentation
+
+<CardGroup cols={2}>
+  <Card title="Firebase Functions" icon="fire" href="/api/firebase-functions">
+    Email sending function reference
+  </Card>
+  <Card title="Multi-Tenant Config" icon="building" href="/features/multi-tenant">
+    Portal-specific metadata configuration
+  </Card>
+  <Card title="Form Components" icon="input-text" href="/components/forms">
+    Form UI components used
+  </Card>
+  <Card title="State Management" icon="database" href="/development/state-management">
+    Redux setup slice for portal config
+  </Card>
+</CardGroup>
