@@ -1,0 +1,125 @@
+{
+  "projectType": "saas",
+  "projectName": "TradeMaster Transactions Portales",
+  "projectDescription": "Multi-tenant event ticketing platform with secure payment processing and customer portal management",
+  "theme": "palm",
+  "primaryColor": "#3B82F6",
+  "lightColor": "#60A5FA",
+  "darkColor": "#1E40AF",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Getting Started",
+            "pages": [
+              "introduction",
+              "quickstart",
+              "architecture"
+            ]
+          },
+          {
+            "group": "Core Features",
+            "pages": [
+              "features/multi-tenant",
+              "features/event-management",
+              "features/ticket-purchasing",
+              "features/payment-processing",
+              "features/user-authentication"
+            ]
+          },
+          {
+            "group": "Configuration",
+            "pages": [
+              "configuration/firebase-setup",
+              "configuration/stripe-integration",
+              "configuration/environment-variables",
+              "configuration/theme-customization"
+            ]
+          },
+          {
+            "group": "Deployment",
+            "pages": [
+              "deployment/firebase-hosting",
+              "deployment/build-process",
+              "deployment/production-checklist"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Components",
+        "groups": [
+          {
+            "group": "UI Components",
+            "pages": [
+              "components/overview",
+              "components/forms",
+              "components/dialogs",
+              "components/navigation",
+              "components/tables"
+            ]
+          },
+          {
+            "group": "Views",
+            "pages": [
+              "views/home",
+              "views/events",
+              "views/purchase-flow",
+              "views/user-profile",
+              "views/authentication"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Development",
+        "groups": [
+          {
+            "group": "Development Guide",
+            "pages": [
+              "development/local-setup",
+              "development/project-structure",
+              "development/state-management",
+              "development/routing"
+            ]
+          },
+          {
+            "group": "API Reference",
+            "pages": [
+              "api/firebase-functions",
+              "api/payment-methods",
+              "api/event-operations",
+              "api/ticket-operations"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Multi-tenant portal system with custom branding per client",
+    "Event browsing and ticketing with real-time availability",
+    "Secure payment processing via Stripe and Mercantil",
+    "Firebase authentication with email verification",
+    "Redux state management with encrypted persistence",
+    "Responsive UI with Tailwind CSS and Radix UI components",
+    "Mobile payment support including BCV integration",
+    "Protected routes with authentication guards"
+  ],
+  "publicApiSurface": [
+    "list_events_clients - Fetch events for a specific client",
+    "tickets_list_event_sales_virtual - Get available tickets for an event",
+    "tickets_lock_virtual - Lock tickets during purchase",
+    "tickets_unlock_param_virtual - Unlock tickets if purchase fails",
+    "order_created - Create a new order",
+    "stripe_create_payment_intent - Initialize Stripe payment",
+    "stripe_confirm_payment - Confirm Stripe payment",
+    "api_mercantil_tdc_pay - Process credit card payment",
+    "api_mercantil_tdd_pay - Process debit card payment",
+    "api_mercantil_c2p_pay - Process C2P payment",
+    "mobile_payment_bcv - Process mobile BCV payment",
+    "send_email - Send notification emails"
+  ]
+}
